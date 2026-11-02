@@ -452,6 +452,57 @@ html, body {
   animation: glow 2s infinite;
 }
 
+/* ═══ Стилизация scrollbar для карты ═══ */
+.map-container::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.map-container::-webkit-scrollbar-track {
+  background: #0a0a1a;
+  border-radius: 3px;
+}
+
+.map-container::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
+  border: 1px solid #0a0a1a;
+}
+
+.map-container::-webkit-scrollbar-thumb:hover {
+  background: #6cf;
+}
+
+/* Для Firefox */
+.map-container {
+  scrollbar-width: thin;
+  scrollbar-color: #333 #0a0a1a;
+}
+
+/* ═══ Resizable панели ═══ */
+.left, .right {
+  position: relative;
+}
+
+.left::-webkit-resizer,
+.right::-webkit-resizer {
+  background: linear-gradient(135deg, transparent 50%, #6cf 50%);
+  background-size: 10px 10px;
+}
+
+/* ═══ Кнопки сворачивания ═══ */
+.left > button:first-child,
+.right > button:first-child {
+  box-shadow: 0 0 8px rgba(102, 204, 255, 0.3);
+}
+
+.left > button:first-child:hover,
+.right > button:first-child:hover {
+  box-shadow: 0 0 12px rgba(102, 204, 255, 0.6);
+  background: #6cf;
+  color: #000;
+}
+
 /* ═══ Подсказки (Tooltips) ═══ */
 .tt-anchor {
   color: #6cf;

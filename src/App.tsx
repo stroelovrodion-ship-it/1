@@ -46,6 +46,9 @@ function App() {
   const [showSpellList, setShowSpellList] = useState(false);
   const [renamingSlot, setRenamingSlot] = useState<number | null>(null);
   const [newSpellName, setNewSpellName] = useState('');
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [showLegend, setShowLegend] = useState(true);
 
   const battleLogRef = useRef<HTMLDivElement>(null);
   const eventLogRef = useRef<HTMLDivElement>(null);
@@ -445,7 +448,34 @@ function App() {
   return (
     <div className="game">
       {/* ═══ ЛЕВАЯ ПАНЕЛЬ ═══ */}
-      <div className="left">
+      <div className="left" style={{ 
+        width: leftCollapsed ? '40px' : '50%',
+        transition: 'width 0.3s ease',
+        resize: 'horizontal',
+        overflow: 'hidden',
+        minWidth: leftCollapsed ? '40px' : '300px',
+        maxWidth: '70%',
+      }}>
+        {/* Кнопка сворачивания */}
+        <button 
+          className="btn" 
+          onClick={() => setLeftCollapsed(!leftCollapsed)}
+          style={{ 
+            position: 'absolute', 
+            top: '50%', 
+            right: '-12px',
+            transform: 'translateY(-50%)',
+            zIndex: 100,
+            padding: '4px 8px',
+            fontSize: '10px',
+            borderRadius: '0 4px 4px 0',
+          }}
+        >
+          {leftCollapsed ? '▶' : '◀'}
+        </button>
+        
+        {!leftCollapsed && (
+          <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
         <div className="block">
           <div className="tabs-wrap">
             <div className="tabs">
@@ -551,24 +581,41 @@ function App() {
                 {showMap && (
                   <div className="fade-in" style={{ border: '1px solid #333', padding: '8px', marginBottom: '8px', position: 'relative', height: '320px', background: '#050510', overflow: 'hidden' }}>
                     {/* Панель управления картой */}
-                    <div style={{ position: 'absolute', top: '4px', left: '4px', display: 'flex', gap: '4px', zIndex: 20 }}>
+                    <div style={{ position: 'absolute', top: '4px', left: '4px', display: 'flex', gap: '4px', zIndex: 30 }}>
                       <button className="btn" style={{ fontSize: '7px', padding: '2px 6px' }} onClick={() => setShowMap(false)}>✕ Закрыть</button>
                       <button className="btn" style={{ fontSize: '7px', padding: '2px 6px' }} onClick={() => setSelectedMapLocation(currentLocation)}>📍 Моя позиция</button>
+                      <button className="btn" style={{ fontSize: '7px', padding: '2px 6px' }} onClick={() => setShowLegend(!showLegend)}>
+                        {showLegend ? '📖 Скрыть легенду' : '📖 Показать легенду'}
+                      </button>
                     </div>
                     
-                    {/* Легенда карты */}
-                    <div style={{ position: 'absolute', top: '4px', right: '4px', fontSize: '7px', color: '#888', background: '#0a0a1a', padding: '6px', border: '1px solid #333', zIndex: 10, borderRadius: '3px' }}>
-                      <div style={{ color: '#6cf', marginBottom: '3px', fontSize: '8px' }}>Легенда:</div>
-                      <div style={{ marginBottom: '2px' }}>🏰 <span style={{ color: '#6cf' }}>Город</span></div>
-                      <div style={{ marginBottom: '2px' }}>⛺ <span style={{ color: '#6f6' }}>Лагерь</span></div>
-                      <div style={{ marginBottom: '2px' }}>⚔️ <span style={{ color: '#f86' }}>Опасная</span></div>
-                      <div style={{ marginBottom: '2px' }}>🏛️ <span style={{ color: '#f66' }}>Подземелье</span></div>
-                      <div style={{ marginBottom: '2px' }}>🌍 <span style={{ color: '#c6f' }}>Материк</span></div>
-                      <div>✨ <span style={{ color: '#fc6' }}>Особая</span></div>
-                    </div>
+                    {/* Легенда карты - сворачиваемая */}
+                    {showLegend && (
+                      <div style={{ 
+                        position: 'absolute', 
+                        bottom: '4px', 
+                        right: '4px', 
+                        fontSize: '7px', 
+                        color: '#888', 
+                        background: '#0a0a1a', 
+                        padding: '6px', 
+                        border: '1px solid #333', 
+                        zIndex: 20, 
+                        borderRadius: '3px',
+                        maxWidth: '120px',
+                      }}>
+                        <div style={{ color: '#6cf', marginBottom: '3px', fontSize: '8px', fontWeight: 'bold' }}>Легенда:</div>
+                        <div style={{ marginBottom: '2px' }}>🏰 <span style={{ color: '#6cf' }}>Город</span></div>
+                        <div style={{ marginBottom: '2px' }}>⛺ <span style={{ color: '#6f6' }}>Лагерь</span></div>
+                        <div style={{ marginBottom: '2px' }}>⚔️ <span style={{ color: '#f86' }}>Опасная</span></div>
+                        <div style={{ marginBottom: '2px' }}>🏛️ <span style={{ color: '#f66' }}>Подземелье</span></div>
+                        <div style={{ marginBottom: '2px' }}>🌍 <span style={{ color: '#c6f' }}>Материк</span></div>
+                        <div>✨ <span style={{ color: '#fc6' }}>Особая</span></div>
+                      </div>
+                    )}
                     
                     {/* Контейнер карты с возможностью перетаскивания */}
-                    <div style={{ 
+                    <div className="map-container" style={{ 
                       position: 'absolute', 
                       top: '30px', 
                       left: '0', 
@@ -744,14 +791,15 @@ function App() {
                           bottom: '8px', 
                           left: '8px', 
                           right: '8px', 
-                          background: 'rgba(10, 10, 26, 0.95)', 
+                          background: '#0a0a1a', 
                           border: isCurrent ? '2px solid #ff0' : '2px solid #6cf', 
                           borderRadius: '4px',
                           padding: '12px', 
                           fontSize: '9px',
                           boxShadow: isCurrent ? '0 0 12px rgba(255, 255, 0, 0.3)' : '0 0 12px rgba(102, 204, 255, 0.3)',
-                          maxHeight: '200px',
+                          maxHeight: '180px',
                           overflowY: 'auto',
+                          zIndex: 25,
                         }}>
                           {/* Заголовок */}
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '6px' }}>
@@ -895,10 +943,39 @@ function App() {
           </div>
         </div>
         <div className="logs-footer"><button className="btn danger" onClick={game.resetGame}>Выход</button></div>
+          </div>
+        )}
       </div>
 
       {/* ═══ ПРАВАЯ ПАНЕЛЬ ═══ */}
-      <div className="right">
+      <div className="right" style={{ 
+        width: rightCollapsed ? '40px' : '50%',
+        transition: 'width 0.3s ease',
+        resize: 'horizontal',
+        overflow: 'hidden',
+        minWidth: rightCollapsed ? '40px' : '300px',
+        maxWidth: '70%',
+      }}>
+        {/* Кнопка сворачивания */}
+        <button 
+          className="btn" 
+          onClick={() => setRightCollapsed(!rightCollapsed)}
+          style={{ 
+            position: 'absolute', 
+            top: '50%', 
+            left: '-12px',
+            transform: 'translateY(-50%)',
+            zIndex: 100,
+            padding: '4px 8px',
+            fontSize: '10px',
+            borderRadius: '4px 0 0 4px',
+          }}
+        >
+          {rightCollapsed ? '◀' : '▶'}
+        </button>
+        
+        {!rightCollapsed && (
+          <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
         <div className="right-top">
           <div className="block">
             <div className="tabs-wrap">
@@ -1237,6 +1314,8 @@ function App() {
             </div>
           </div>
         </div>
+          </div>
+        )}
       </div>
     </div>
   );
