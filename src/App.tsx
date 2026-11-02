@@ -96,26 +96,39 @@ function App() {
                 bs.runes.map((rId, idx) => {
                   const r = RUNES[rId]; if (!r) return null;
                   return (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px', border: '1px solid #333', fontSize: '8px' }}>
-                      <Tooltip text={r.description}>
-                        <span style={{ color: r.type === 'time' ? '#6cf' : r.type === 'effect' ? '#f66' : '#c6f' }}>{r.name} [{r.osmCost}]</span>
-                      </Tooltip>
-                      <button className="btn danger" style={{ fontSize: '7px', padding: '1px 4px' }} onClick={() => game.removeRuneFromBuild(idx)}>✕</button>
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px', border: '1px solid #333', fontSize: '8px', background: '#0a0a1a' }}>
+                      <div style={{ flex: 1 }}>
+                        <Tooltip text={r.description}>
+                          <div style={{ color: r.type === 'time' ? '#6cf' : r.type === 'effect' ? '#f66' : '#c6f', marginBottom: '2px' }}>
+                            {r.name}
+                          </div>
+                        </Tooltip>
+                        <div style={{ fontSize: '7px', color: '#888' }}>
+                          ОЧСМ: <span style={{ color: '#fc6' }}>{r.osmCost}</span> | Тип: {r.type === 'time' ? 'Время' : r.type === 'effect' ? 'Эффект' : 'Уникальная'}
+                          {r.element && ` | Стихия: ${r.element}`}
+                          {r.value > 0 && ` | Сила: ${r.value}`}
+                          {r.chance && r.chance > 0 && ` | Шанс: ${r.chance}%`}
+                        </div>
+                      </div>
+                      <button className="btn danger" style={{ fontSize: '7px', padding: '2px 6px' }} onClick={() => game.removeRuneFromBuild(idx)}>✕</button>
                     </div>
                   );
                 })
               }
               <div style={{ fontSize: '8px', color: '#6cf', marginTop: '4px' }}>Доступные руны:</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto', maxHeight: '100px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', overflowY: 'auto', maxHeight: '120px' }}>
                 {hero.collectedRunes.map(rId => {
                   const r = RUNES[rId]; if (!r) return null;
                   return (
-                    <Tooltip key={rId} text={r.description}>
-                      <button className="btn" style={{ fontSize: '7px', textAlign: 'left', padding: '3px 6px', width: '100%' }}
+                    <Tooltip key={rId} text={`${r.description}\n\nОЧСМ: ${r.osmCost}\nТип: ${r.type === 'time' ? 'Время' : r.type === 'effect' ? 'Эффект' : 'Уникальная'}${r.element ? `\nСтихия: ${r.element}` : ''}${r.value > 0 ? `\nСила: ${r.value}` : ''}${r.chance && r.chance > 0 ? `\nШанс: ${r.chance}%` : ''}`}>
+                      <button className="btn" style={{ fontSize: '7px', textAlign: 'left', padding: '4px 6px', width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                         onClick={() => game.addRuneToBuild(rId)}>
-                        <span style={{ color: r.type === 'time' ? '#6cf' : r.type === 'effect' ? '#f66' : '#c6f' }}>
-                          [{r.type === 'time' ? 'В' : r.type === 'effect' ? 'Э' : 'У'}]
-                        </span> {r.name}
+                        <div>
+                          <span style={{ color: r.type === 'time' ? '#6cf' : r.type === 'effect' ? '#f66' : '#c6f' }}>
+                            [{r.type === 'time' ? 'В' : r.type === 'effect' ? 'Э' : 'У'}]
+                          </span> {r.name}
+                        </div>
+                        <span style={{ color: '#fc6', fontSize: '7px' }}>⚡{r.osmCost}</span>
                       </button>
                     </Tooltip>
                   );
@@ -129,15 +142,28 @@ function App() {
                 <Tooltip text="Сила стихии влияет на урон. Слабости врага = x1.5 урон."> ~</Tooltip>
               </div>
               <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
-                {(['fire', 'water', 'earth', 'air', 'light', 'dark'] as ElementType[]).map(el => (
-                  <Tooltip key={el} text={`Сила ${el}: ${effectiveStats[`${el}Power` as keyof typeof effectiveStats]}`}>
-                    <button className={`btn ${bs.element === el ? 'success' : ''}`}
-                      style={{ fontSize: '7px', padding: '3px 6px' }}
-                      onClick={() => game.setBuildState({ ...bs, element: el })}>
-                      {el === 'fire' ? '🔥' : el === 'water' ? '💧' : el === 'earth' ? '🪨' : el === 'air' ? '💨' : el === 'light' ? '✨' : '🌑'} {el}
-                    </button>
-                  </Tooltip>
-                ))}
+                {(['fire', 'water', 'earth', 'air', 'light', 'dark'] as ElementType[]).map(el => {
+                  const descriptions: Record<ElementType, string> = {
+                    fire: 'Огонь: прямой урон, поджог',
+                    water: 'Вода: заморозка, замедление',
+                    earth: 'Земля: оглушение, яд',
+                    air: 'Воздух: ослепление, шок',
+                    light: 'Свет: лечение, очищение',
+                    dark: 'Тьма: кража жизни, проклятие',
+                    none: ''
+                  };
+                  const power = effectiveStats[`${el}Power` as keyof typeof effectiveStats];
+                  return (
+                    <Tooltip key={el} text={`${descriptions[el]}\n\nТвоя сила: ${power}\nУрон: +${power * 3}\n\nСлабости/сопротивления зависят от части тела врага.`}>
+                      <button className={`btn ${bs.element === el ? 'success' : ''}`}
+                        style={{ fontSize: '7px', padding: '4px 8px' }}
+                        onClick={() => game.setBuildState({ ...bs, element: el })}>
+                        <div>{el === 'fire' ? '🔥' : el === 'water' ? '💧' : el === 'earth' ? '🪨' : el === 'air' ? '💨' : el === 'light' ? '✨' : '🌑'} {el}</div>
+                        <div style={{ fontSize: '6px', color: '#fc6' }}>⚡{power}</div>
+                      </button>
+                    </Tooltip>
+                  );
+                })}
               </div>
 
               <div style={{ fontSize: '8px', color: '#6cf', marginTop: '4px' }}>
@@ -146,11 +172,12 @@ function App() {
               </div>
               <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
                 {Object.values(TRAJECTORIES).map(t => (
-                  <Tooltip key={t.id} text={`${t.description}\nУрон: x${t.damageMultiplier} | MP: +${t.mpCost}`}>
+                  <Tooltip key={t.id} text={`${t.description}\n\nМножитель урона: x${t.damageMultiplier}\nТочность: ${t.accuracyBonus > 0 ? '+' : ''}${t.accuracyBonus}%\nДоп. MP: +${t.mpCost}\n\n${t.accuracyBonus > 20 ? '✓ Высокая точность' : t.accuracyBonus < 0 ? '⚠ Низкая точность' : '→ Средняя точность'}`}>
                     <button className={`btn ${bs.trajectory === t.id ? 'success' : ''}`}
-                      style={{ fontSize: '7px', padding: '3px 6px' }}
+                      style={{ fontSize: '7px', padding: '4px 8px', textAlign: 'left' }}
                       onClick={() => game.setBuildState({ ...bs, trajectory: t.id })}>
-                      {t.name}
+                      <div>{t.name}</div>
+                      <div style={{ fontSize: '6px', color: '#888' }}>x{t.damageMultiplier} | +{t.mpCost}MP</div>
                     </button>
                   </Tooltip>
                 ))}
@@ -164,11 +191,12 @@ function App() {
                 {hero.knownScrolls.filter(s => SPELL_FORMS[s]).map(fId => {
                   const f = SPELL_FORMS[fId]; if (!f) return null;
                   return (
-                    <Tooltip key={fId} text={`${f.description}\nУрон: +${f.damageBonus} | Крит: +${f.critBonus}% | MP: ${f.mpCost}`}>
+                    <Tooltip key={fId} text={`${f.description}\n\nБазовый урон: +${f.damageBonus}\nШанс крита: +${f.critBonus}%\nБазовая стоимость: ${f.mpCost} MP\nУровень: ${f.level}/5\n\nНайди больше свитков чтобы повысить уровень формы!`}>
                       <button className={`btn ${bs.form === fId ? 'success' : ''}`}
-                        style={{ fontSize: '7px', padding: '3px 6px' }}
+                        style={{ fontSize: '7px', padding: '4px 8px', textAlign: 'left' }}
                         onClick={() => game.setBuildState({ ...bs, form: fId })}>
-                        {f.name}
+                        <div>{f.name}</div>
+                        <div style={{ fontSize: '6px', color: '#888' }}>+{f.damageBonus} урон | +{f.critBonus}% крит</div>
                       </button>
                     </Tooltip>
                   );
@@ -182,16 +210,20 @@ function App() {
               </div>
               <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
                 <button className={`btn ${bs.scrollEffect === '' ? 'success' : ''}`}
-                  style={{ fontSize: '7px', padding: '3px 6px' }}
-                  onClick={() => game.setBuildState({ ...bs, scrollEffect: '' })}>—</button>
+                  style={{ fontSize: '7px', padding: '4px 8px' }}
+                  onClick={() => game.setBuildState({ ...bs, scrollEffect: '' })}>
+                  <div>Без эффекта</div>
+                  <div style={{ fontSize: '6px', color: '#888' }}>Только урон</div>
+                </button>
                 {hero.knownScrolls.filter(s => SCROLL_EFFECTS[s]).map(sId => {
                   const s = SCROLL_EFFECTS[sId]; if (!s) return null;
                   return (
-                    <Tooltip key={sId} text={`${s.description}\nШанс: ${s.chance}%`}>
+                    <Tooltip key={sId} text={`${s.description}\n\nШанс срабатывания: ${s.chance}%\nМножитель силы: x${s.power}\nУровень эффекта: ${s.level}\nСтихия: ${s.element}\n\n⚠️ Эффекты не стакаются - если уже активен, не применится!`}>
                       <button className={`btn ${bs.scrollEffect === sId ? 'success' : ''}`}
-                        style={{ fontSize: '7px', padding: '3px 6px' }}
+                        style={{ fontSize: '7px', padding: '4px 8px', textAlign: 'left' }}
                         onClick={() => game.setBuildState({ ...bs, scrollEffect: sId })}>
-                        {s.name}
+                        <div>{s.name}</div>
+                        <div style={{ fontSize: '6px', color: '#888' }}>{s.chance}% | ур.{s.level}</div>
                       </button>
                     </Tooltip>
                   );
@@ -199,6 +231,63 @@ function App() {
               </div>
             </>
           )}
+
+          {/* Превью результата */}
+          {(bs.target === 'enemy' && bs.element && bs.form) || (bs.target === 'self' && bs.runes.length > 0) ? (
+            <div style={{ border: '1px solid #6cf', padding: '8px', background: '#0a0a1a', marginTop: '8px' }}>
+              <div style={{ fontSize: '8px', color: '#6cf', marginBottom: '6px' }}>📊 Превью заклинания:</div>
+              {bs.target === 'enemy' ? (
+                <div style={{ fontSize: '7px', color: '#e0e0e0' }}>
+                  {(() => {
+                    const form = SPELL_FORMS[bs.form || 'bolt'];
+                    const traj = TRAJECTORIES[bs.trajectory || 'direct'];
+                    const elemPower = effectiveStats[`${bs.element}Power` as keyof typeof effectiveStats] as number;
+                    const baseDmg = 8 + elemPower * 3 + (form?.damageBonus || 0);
+                    const finalDmg = Math.floor(baseDmg * (traj?.damageMultiplier || 1));
+                    const critChance = (form?.critBonus || 0);
+                    const mpCost = 5 + (traj?.mpCost || 0) + ((form?.mpCost || 3) - 3);
+                    
+                    return (
+                      <>
+                        <div>Базовый урон: <span style={{ color: '#f66' }}>{finalDmg}</span></div>
+                        <div>Шанс крита: <span style={{ color: '#fc6' }}>{critChance}%</span></div>
+                        <div>Стоимость MP: <span style={{ color: '#c6f' }}>{mpCost}</span></div>
+                        {bs.scrollEffect && SCROLL_EFFECTS[bs.scrollEffect] && (
+                          <div>Доп. эффект: <span style={{ color: '#6f6' }}>{SCROLL_EFFECTS[bs.scrollEffect].name} ({SCROLL_EFFECTS[bs.scrollEffect].chance}%)</span></div>
+                        )}
+                        <div style={{ marginTop: '4px', color: '#888', fontSize: '6px' }}>
+                          * Финальный урон зависит от слабостей/сопротивлений части тела
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              ) : (
+                <div style={{ fontSize: '7px', color: '#e0e0e0' }}>
+                  {(() => {
+                    const totalOsm = bs.runes.reduce((sum, rId) => sum + (RUNES[rId]?.osmCost || 0), 0);
+                    const mpCost = totalOsm * 3 + 3;
+                    const hasHeal = bs.runes.some(rId => RUNES[rId]?.effect === 'heal');
+                    const healAmount = hasHeal ? bs.runes.reduce((sum, rId) => {
+                      const r = RUNES[rId];
+                      return r?.effect === 'heal' ? sum + r.value + Math.floor(effectiveStats.int * 2) : sum;
+                    }, 0) : 0;
+                    
+                    return (
+                      <>
+                        <div>ОЧСМ использовано: <span style={{ color: '#fc6' }}>{totalOsm}/{hero.osmMax}</span></div>
+                        <div>Стоимость MP: <span style={{ color: '#c6f' }}>{mpCost}</span></div>
+                        {healAmount > 0 && <div>Лечение: <span style={{ color: '#6f6' }}>+{healAmount} HP</span></div>}
+                        <div style={{ marginTop: '4px', color: '#888', fontSize: '6px' }}>
+                          Руны: {bs.runes.length} | Типы: {bs.runes.map(rId => RUNES[rId]?.type).join(', ')}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          ) : null}
 
           <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
             <button className="btn success" onClick={game.saveBuild}>💾 Сохранить</button>
@@ -213,34 +302,57 @@ function App() {
       const entry = hero.bestiary[enemyId];
       const template = ENEMIES[enemyId];
       if (!entry || !template) return <div className="placeholder">Не найдено.</div>;
+      
+      const studiedCount = Object.values(entry.studiedParts).filter(p => p.discovered).length;
+      const totalParts = template.bodyParts.length;
+      const progressPct = Math.floor((studiedCount / totalParts) * 100);
+      
       return (
         <div className="interaction" style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', overflow: 'auto' }}>
           <div className="inv-title">// БИСТЕАРИЙ — ИЗУЧЕНИЕ</div>
           <div className="info-name">{template.name} [Ур. {template.level}]</div>
-          <div style={{ fontSize: '9px', color: '#888', marginBottom: '4px' }}>{template.description}</div>
-          <div className="info-prop">Убито: <span>{entry.kills}</span></div>
+          <div style={{ fontSize: '9px', color: '#888', marginBottom: '4px', lineHeight: '1.6' }}>{template.description}</div>
+          
+          <div style={{ fontSize: '8px', color: '#6cf', borderBottom: '1px dashed #333', paddingBottom: '4px' }}>
+            📊 СТАТИСТИКА
+          </div>
+          <div className="info-prop">Убито: <span style={{ color: '#fc6' }}>{entry.kills}</span></div>
           <div className="info-prop">Тип: <span>{template.tags.type}</span></div>
           <div className="info-prop">Элемент: <span>{template.tags.element}</span></div>
-          <div className="info-block-sep">// ЧАСТИ ТЕЛА</div>
+          <div className="info-prop">Поведение: <span>{template.tags.behavior}</span></div>
+          
+          <div className="info-block-sep">// ЧАСТИ ТЕЛА [{studiedCount}/{totalParts} изучено - {progressPct}%]</div>
           {template.bodyParts.map(bp => {
             const studied = entry.studiedParts[bp.part];
             return (
-              <div key={bp.part} style={{ fontSize: '8px', padding: '4px', border: '1px solid #333', marginBottom: '2px' }}>
-                <span style={{ color: '#e0e0e0' }}>{bodyPartNames[bp.part]}</span>
+              <div key={bp.part} style={{ fontSize: '8px', padding: '6px', border: '1px solid #333', marginBottom: '3px', background: studied?.discovered ? '#0a0a1a' : 'transparent' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#e0e0e0' }}>{bodyPartNames[bp.part]}</span>
+                  {studied?.discovered && <span style={{ color: '#6f6', fontSize: '7px' }}>✓</span>}
+                </div>
                 {studied?.discovered ? (
-                  <>
-                    {studied.weakness && <span style={{ color: '#6f6', marginLeft: '8px' }}>⚡ Слабость: {studied.weakness}</span>}
-                    {studied.resistance && <span style={{ color: '#f66', marginLeft: '8px' }}>🛡 Сопротивление: {studied.resistance}</span>}
-                    {!studied.weakness && !studied.resistance && <span style={{ color: '#888', marginLeft: '8px' }}>— нейтрально</span>}
-                  </>
+                  <div style={{ marginTop: '3px', fontSize: '7px' }}>
+                    {studied.weakness && <div style={{ color: '#6f6' }}>⚡ Слабость к: {studied.weakness} (x1.5 урона)</div>}
+                    {studied.resistance && <div style={{ color: '#f66' }}>🛡 Сопротивление к: {studied.resistance} (x0.5 урона)</div>}
+                    {!studied.weakness && !studied.resistance && <div style={{ color: '#888' }}>— Нейтрально ко всем стихиям</div>}
+                  </div>
                 ) : (
-                  <span style={{ color: '#555', marginLeft: '8px' }}>???</span>
+                  <div style={{ color: '#555', marginLeft: '0', fontSize: '7px', marginTop: '3px' }}>
+                    ??? - Атакуй разными стихиями чтобы изучить
+                  </div>
                 )}
               </div>
             );
           })}
-          <div className="info-block-sep" style={{ marginTop: '4px' }}>// ПОДСКАЗКА</div>
-          <div className="placeholder">Атакуй разными стихиями чтобы изучить части тела.</div>
+          
+          <div className="info-block-sep" style={{ marginTop: '4px' }}>// СОВЕТЫ</div>
+          <div style={{ fontSize: '7px', color: '#888', lineHeight: '1.6' }}>
+            • Атакуй части тела магией разных стихий<br/>
+            • Слабости дают x1.5 урона<br/>
+            • Сопротивления снижают урон до x0.5<br/>
+            • Эффекты не стакаются - проверяй активные дебаффы<br/>
+            • {progressPct < 100 ? `Изучи ещё ${totalParts - studiedCount} частей для полного знания` : '✓ Полностью изучен!'}
+          </div>
         </div>
       );
     }
@@ -249,22 +361,79 @@ function App() {
       const invItem = hero.inventory[parseInt(game.selectedItem)];
       if (!invItem) return <div className="placeholder">Не найдено.</div>;
       const item = invItem.item;
+      
+      const rarityNames = {
+        common: 'Обычный',
+        uncommon: 'Необычный',
+        rare: 'Редкий',
+        epic: 'Эпический',
+        artifact: 'Артефакт'
+      };
+      
       return (
         <div className="interaction" style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', overflow: 'auto' }}>
           <div className="inv-title">// ПРЕДМЕТ</div>
           <div className="info-name"><span className={rarityClass(item.tags.rarity)}>{item.name}</span></div>
-          <div style={{ fontSize: '9px', color: '#888' }}>{item.description}</div>
-          <div className="info-prop">Редкость: <span className={rarityClass(item.tags.rarity)}>{item.tags.rarity}</span></div>
-          {item.tags.slot && <div className="info-prop">Слот: <span>{slotNames[item.tags.slot]}</span></div>}
+          <div style={{ fontSize: '9px', color: '#888', lineHeight: '1.6', marginBottom: '4px' }}>{item.description}</div>
+          
+          <div style={{ fontSize: '8px', color: '#6cf', borderBottom: '1px dashed #333', paddingBottom: '4px' }}>
+            📊 ХАРАКТЕРИСТИКИ
+          </div>
+          <div className="info-prop">Редкость: <span className={rarityClass(item.tags.rarity)}>{rarityNames[item.tags.rarity]}</span></div>
+          <div className="info-prop">Уровень: <span>{item.tags.level}</span></div>
+          {item.tags.slot && <div className="info-prop">Слот экипировки: <span>{slotNames[item.tags.slot]}</span></div>}
           {item.tags.element && item.tags.element !== 'none' && <div className="info-prop">Стихия: <span>{item.tags.element}</span></div>}
-          {item.stats && <>
-            <div className="info-block-sep">// БОНУСЫ</div>
-            {Object.entries(item.stats).map(([key, val]) => val ? <div key={key} className="info-prop">{key}: <span className="val-buff">+{val}</span></div> : null)}
-          </>}
-          <div className="info-prop">В наличии: <span>x{invItem.count}</span></div>
+          {item.tags.material && <div className="info-prop">Материал: <span>{item.tags.material}</span></div>}
+          {item.tags.consumable && <div className="info-prop">Тип: <span>{item.tags.consumable}</span></div>}
+          
+          {item.stats && Object.values(item.stats).some(v => v) && (
+            <>
+              <div className="info-block-sep">// БОНУСЫ К СТАТАМ</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                {Object.entries(item.stats).map(([key, val]) => {
+                  if (!val) return null;
+                  const statNames: Record<string, string> = {
+                    str: '💪 Сила',
+                    agi: '🏃 Ловкость',
+                    int: '🧠 Интеллект',
+                    lck: '🍀 Удача',
+                    maxHp: '❤️ Макс HP',
+                    maxMp: '💎 Макс MP',
+                    armor: '🛡️ Броня',
+                    firePower: '🔥 Сила огня',
+                    waterPower: '💧 Сила воды',
+                    earthPower: '🪨 Сила земли',
+                    airPower: '💨 Сила воздуха',
+                    lightPower: '✨ Сила света',
+                    darkPower: '🌑 Сила тьмы'
+                  };
+                  return (
+                    <div key={key} className="info-prop" style={{ fontSize: '8px' }}>
+                      {statNames[key] || key}: <span className="val-buff">+{val}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+          
+          {item.effectValue && (
+            <>
+              <div className="info-block-sep">// ЭФФЕКТ</div>
+              <div className="info-prop">
+                {item.tags.effect === 'heal' ? 'Восстанавливает' : 'Урон'}: <span className="val-buff">{item.effectValue}</span>
+                {item.tags.effect === 'heal' && <span style={{ color: '#888', fontSize: '7px' }}> {item.id.includes('hp') ? 'HP' : 'MP'}</span>}
+              </div>
+            </>
+          )}
+          
+          <div className="info-block-sep">// ИНФОРМАЦИЯ</div>
+          <div className="info-prop">В наличии: <span style={{ color: '#fc6' }}>x{invItem.count}</span></div>
+          <div className="info-prop">Цена: <span style={{ color: '#fc6' }}>{item.value} золота</span></div>
+          
           <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
-            {item.tags.slot && <button className="btn" onClick={() => game.equipItem(parseInt(game.selectedItem!))}>Надеть</button>}
-            {item.tags.consumable && <button className="btn success" onClick={() => game.useItem(parseInt(game.selectedItem!))}>Использовать</button>}
+            {item.tags.slot && <button className="btn" onClick={() => game.equipItem(parseInt(game.selectedItem!))}>🎽 Надеть</button>}
+            {item.tags.consumable && <button className="btn success" onClick={() => game.useItem(parseInt(game.selectedItem!))}>🧪 Использовать</button>}
           </div>
         </div>
       );
@@ -585,27 +754,131 @@ function App() {
 
               <div className={`pane ${rightTopTab === 'stats-hero' ? 'active' : ''}`}>
                 <div className="hero-stats">
-                  <div className="hero-stats-title">// СТАТЫ</div>
+                  <div className="hero-stats-title">// СТАТЫ ПЕРСОНАЖА</div>
                   <div className="hero-stats-name">{hero.name} [Ур. {hero.level}]</div>
-                  <div style={{ fontSize: '9px', color: '#6cf', marginBottom: '4px' }}>XP: {hero.xp}/{hero.xpToNext} | Золото: <span style={{ color: '#fc6' }}>{hero.gold}</span></div>
-                  <div style={{ fontSize: '9px', color: '#c6f', marginBottom: '8px' }}>ОЧСМ: {hero.osmMax}</div>
-                  <div className="hero-stats-list">
-                    <div className="stat-row"><span className="stat-key">HP</span><span className="stat-total">{hero.currentHp}/{effectiveStats.maxHp}</span></div>
-                    <div className="stat-row"><span className="stat-key">MP</span><span className="stat-total">{hero.currentMp}/{effectiveStats.maxMp}</span></div>
-                    <div className="stat-row"><span className="stat-key">Сила</span><span className="stat-total">{effectiveStats.str}</span></div>
-                    <div className="stat-row"><span className="stat-key">Ловкость</span><span className="stat-total">{effectiveStats.agi}</span></div>
-                    <div className="stat-row"><span className="stat-key">Интеллект</span><span className="stat-total">{effectiveStats.int}</span></div>
-                    <div className="stat-row"><span className="stat-key">Удача</span><span className="stat-total">{effectiveStats.lck}</span></div>
-                    <div className="stat-row"><span className="stat-key">Броня</span><span className="stat-total">{effectiveStats.armor}</span></div>
+                  
+                  <div style={{ fontSize: '8px', color: '#6cf', marginBottom: '6px' }}>
+                    📊 ПРОГРЕСС
                   </div>
-                  <div className="info-block-sep" style={{ marginTop: '8px' }}>// СИЛА СТИХИЙ</div>
+                  <div style={{ fontSize: '8px', marginBottom: '8px' }}>
+                    <div className="stat-row">
+                      <span className="stat-key">Опыт:</span>
+                      <span className="stat-total">{hero.xp} / {hero.xpToNext}</span>
+                    </div>
+                    <div style={{ height: '4px', background: '#1a1a1a', marginTop: '2px', borderRadius: '2px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${(hero.xp / hero.xpToNext) * 100}%`, background: 'linear-gradient(90deg, #6cf, #c6f)' }} />
+                    </div>
+                    <div className="stat-row" style={{ marginTop: '4px' }}>
+                      <span className="stat-key">Золото:</span>
+                      <span style={{ color: '#fc6' }}>{hero.gold}</span>
+                    </div>
+                    <div className="stat-row">
+                      <span className="stat-key">ОЧСМ:</span>
+                      <span style={{ color: '#c6f' }}>{hero.osmMax}</span>
+                    </div>
+                    <div className="stat-row">
+                      <span className="stat-key">Слоты магии:</span>
+                      <span style={{ color: '#6cf' }}>{game.getMaxSlots(hero.level)} / 7</span>
+                    </div>
+                  </div>
+                  
+                  <div style={{ fontSize: '8px', color: '#6cf', borderBottom: '1px dashed #333', paddingBottom: '4px', marginBottom: '6px' }}>
+                    ❤️ ЖИЗНЕННЫЕ ПОКАЗАТЕЛИ
+                  </div>
                   <div className="hero-stats-list">
-                    <div className="stat-row"><span className="stat-key">🔥 Огонь</span><span className="stat-total">{effectiveStats.firePower}</span></div>
-                    <div className="stat-row"><span className="stat-key">💧 Вода</span><span className="stat-total">{effectiveStats.waterPower}</span></div>
-                    <div className="stat-row"><span className="stat-key">🪨 Земля</span><span className="stat-total">{effectiveStats.earthPower}</span></div>
-                    <div className="stat-row"><span className="stat-key">💨 Воздух</span><span className="stat-total">{effectiveStats.airPower}</span></div>
-                    <div className="stat-row"><span className="stat-key">✨ Свет</span><span className="stat-total">{effectiveStats.lightPower}</span></div>
-                    <div className="stat-row"><span className="stat-key">🌑 Тьма</span><span className="stat-total">{effectiveStats.darkPower}</span></div>
+                    <div className="stat-row">
+                      <Tooltip text="Здоровье. Достигнув 0, ты проиграешь.">
+                        <span className="stat-key">❤️ HP</span>
+                      </Tooltip>
+                      <span className="stat-total">{hero.currentHp} / {effectiveStats.maxHp}</span>
+                    </div>
+                    <div className="stat-row">
+                      <Tooltip text="Мана. Тратится на заклинания.">
+                        <span className="stat-key">💎 MP</span>
+                      </Tooltip>
+                      <span className="stat-total">{hero.currentMp} / {effectiveStats.maxMp}</span>
+                    </div>
+                  </div>
+                  
+                  <div style={{ fontSize: '8px', color: '#6cf', borderBottom: '1px dashed #333', paddingBottom: '4px', marginTop: '8px', marginBottom: '6px' }}>
+                    💪 БАЗОВЫЕ ХАРАКТЕРИСТИКИ
+                  </div>
+                  <div className="hero-stats-list">
+                    <div className="stat-row">
+                      <Tooltip text="Сила увеличивает физический урон.">
+                        <span className="stat-key">💪 Сила</span>
+                      </Tooltip>
+                      <span className="stat-total">{effectiveStats.str}</span>
+                    </div>
+                    <div className="stat-row">
+                      <Tooltip text="Ловкость даёт шанс уклонения и влияет на побег.">
+                        <span className="stat-key">🏃 Ловкость</span>
+                      </Tooltip>
+                      <span className="stat-total">{effectiveStats.agi}</span>
+                    </div>
+                    <div className="stat-row">
+                      <Tooltip text="Интеллект усиливает лечение и магические эффекты.">
+                        <span className="stat-key">🧠 Интеллект</span>
+                      </Tooltip>
+                      <span className="stat-total">{effectiveStats.int}</span>
+                    </div>
+                    <div className="stat-row">
+                      <Tooltip text="Удача увеличивает шанс крита.">
+                        <span className="stat-key">🍀 Удача</span>
+                      </Tooltip>
+                      <span className="stat-total">{effectiveStats.lck}</span>
+                    </div>
+                    <div className="stat-row">
+                      <Tooltip text="Броня снижает получаемый урон.">
+                        <span className="stat-key">🛡️ Броня</span>
+                      </Tooltip>
+                      <span className="stat-total">{effectiveStats.armor}</span>
+                    </div>
+                  </div>
+                  
+                  <div style={{ fontSize: '8px', color: '#6cf', borderBottom: '1px dashed #333', paddingBottom: '4px', marginTop: '8px', marginBottom: '6px' }}>
+                    🔮 СИЛА СТИХИЙ
+                  </div>
+                  <div style={{ fontSize: '7px', color: '#888', marginBottom: '6px' }}>
+                    Влияет на урон магии соответствующей стихии (+3 урона за каждую единицу)
+                  </div>
+                  <div className="hero-stats-list">
+                    <div className="stat-row">
+                      <Tooltip text="Огонь: прямой урон, поджог. Слабость: вода.">
+                        <span className="stat-key">🔥 Огонь</span>
+                      </Tooltip>
+                      <span className="stat-total">{effectiveStats.firePower} <span style={{ color: '#888', fontSize: '7px' }}>(+{effectiveStats.firePower * 3} урона)</span></span>
+                    </div>
+                    <div className="stat-row">
+                      <Tooltip text="Вода: заморозка, замедление. Слабость: огонь.">
+                        <span className="stat-key">💧 Вода</span>
+                      </Tooltip>
+                      <span className="stat-total">{effectiveStats.waterPower} <span style={{ color: '#888', fontSize: '7px' }}>(+{effectiveStats.waterPower * 3} урона)</span></span>
+                    </div>
+                    <div className="stat-row">
+                      <Tooltip text="Земля: оглушение, яд. Слабость: воздух.">
+                        <span className="stat-key">🪨 Земля</span>
+                      </Tooltip>
+                      <span className="stat-total">{effectiveStats.earthPower} <span style={{ color: '#888', fontSize: '7px' }}>(+{effectiveStats.earthPower * 3} урона)</span></span>
+                    </div>
+                    <div className="stat-row">
+                      <Tooltip text="Воздух: ослепление, шок. Слабость: земля.">
+                        <span className="stat-key">💨 Воздух</span>
+                      </Tooltip>
+                      <span className="stat-total">{effectiveStats.airPower} <span style={{ color: '#888', fontSize: '7px' }}>(+{effectiveStats.airPower * 3} урона)</span></span>
+                    </div>
+                    <div className="stat-row">
+                      <Tooltip text="Свет: лечение, очищение. Слабость: тьма.">
+                        <span className="stat-key">✨ Свет</span>
+                      </Tooltip>
+                      <span className="stat-total">{effectiveStats.lightPower} <span style={{ color: '#888', fontSize: '7px' }}>(+{effectiveStats.lightPower * 3} урона)</span></span>
+                    </div>
+                    <div className="stat-row">
+                      <Tooltip text="Тьма: кража жизни, проклятие. Слабость: свет.">
+                        <span className="stat-key">🌑 Тьма</span>
+                      </Tooltip>
+                      <span className="stat-total">{effectiveStats.darkPower} <span style={{ color: '#888', fontSize: '7px' }}>(+{effectiveStats.darkPower * 3} урона)</span></span>
+                    </div>
                   </div>
                 </div>
               </div>
