@@ -549,86 +549,176 @@ function App() {
                   🗺️ {showMap ? 'Скрыть карту' : 'Показать карту'}
                 </button>
                 {showMap && (
-                  <div className="fade-in" style={{ border: '1px solid #333', padding: '8px', marginBottom: '8px', position: 'relative', height: '280px', background: '#050510' }}>
-                    {/* Легенда карты */}
-                    <div style={{ position: 'absolute', top: '4px', right: '4px', fontSize: '7px', color: '#888', background: '#0a0a1a', padding: '4px', border: '1px solid #333', zIndex: 10 }}>
-                      <div style={{ color: '#6cf', marginBottom: '2px' }}>Легенда:</div>
-                      <div>🏰 Город</div>
-                      <div>⛺ Лагерь</div>
-                      <div>⚔️ Опасная зона</div>
-                      <div>🏛️ Подземелье</div>
-                      <div>🌍 Материк</div>
-                      <div>✨ Особая</div>
+                  <div className="fade-in" style={{ border: '1px solid #333', padding: '8px', marginBottom: '8px', position: 'relative', height: '320px', background: '#050510', overflow: 'hidden' }}>
+                    {/* Панель управления картой */}
+                    <div style={{ position: 'absolute', top: '4px', left: '4px', display: 'flex', gap: '4px', zIndex: 20 }}>
+                      <button className="btn" style={{ fontSize: '7px', padding: '2px 6px' }} onClick={() => setShowMap(false)}>✕ Закрыть</button>
+                      <button className="btn" style={{ fontSize: '7px', padding: '2px 6px' }} onClick={() => setSelectedMapLocation(currentLocation)}>📍 Моя позиция</button>
                     </div>
                     
-                    <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-                      {Object.values(LOCATIONS).map(loc => loc.connectedTo.map(cId => {
-                        const cLoc = LOCATIONS[cId]; if (!cLoc) return null;
-                        const isCurrentRoute = (loc.id === currentLocation && cId === selectedMapLocation) || 
-                                             (cId === currentLocation && loc.id === selectedMapLocation);
-                        return <line key={`${loc.id}-${cId}`} x1={`${loc.mapX}%`} y1={`${loc.mapY}%`} x2={`${cLoc.mapX}%`} y2={`${cLoc.mapY}%`} 
-                          stroke={isCurrentRoute ? '#6cf' : '#222'} strokeWidth={isCurrentRoute ? '2' : '1'} 
-                          strokeDasharray={isCurrentRoute ? '5,5' : 'none'} />;
-                      }))}
-                    </svg>
+                    {/* Легенда карты */}
+                    <div style={{ position: 'absolute', top: '4px', right: '4px', fontSize: '7px', color: '#888', background: '#0a0a1a', padding: '6px', border: '1px solid #333', zIndex: 10, borderRadius: '3px' }}>
+                      <div style={{ color: '#6cf', marginBottom: '3px', fontSize: '8px' }}>Легенда:</div>
+                      <div style={{ marginBottom: '2px' }}>🏰 <span style={{ color: '#6cf' }}>Город</span></div>
+                      <div style={{ marginBottom: '2px' }}>⛺ <span style={{ color: '#6f6' }}>Лагерь</span></div>
+                      <div style={{ marginBottom: '2px' }}>⚔️ <span style={{ color: '#f86' }}>Опасная</span></div>
+                      <div style={{ marginBottom: '2px' }}>🏛️ <span style={{ color: '#f66' }}>Подземелье</span></div>
+                      <div style={{ marginBottom: '2px' }}>🌍 <span style={{ color: '#c6f' }}>Материк</span></div>
+                      <div>✨ <span style={{ color: '#fc6' }}>Особая</span></div>
+                    </div>
                     
-                    {Object.values(LOCATIONS).map(loc => {
-                      const getIcon = () => {
-                        if (loc.id === currentLocation) return '📍';
-                        switch(loc.tags.type) {
-                          case 'city': return '🏰';
-                          case 'camp': return '⛺';
-                          case 'dungeon': return '🏛️';
-                          case 'continent': return '🌍';
-                          case 'special': return '✨';
-                          default: return '⚔️';
-                        }
-                      };
-                      
-                      const getColor = () => {
-                        if (loc.id === currentLocation) return '#ff0';
-                        switch(loc.tags.type) {
-                          case 'city': return '#6cf';
-                          case 'camp': return '#6f6';
-                          case 'dungeon': return '#f66';
-                          case 'continent': return '#c6f';
-                          case 'special': return '#fc6';
-                          default: return '#f86';
-                        }
-                      };
-                      
-                      const isAccessible = location?.connectedTo.includes(loc.id) || loc.id === currentLocation;
-                      
-                      return (
-                        <div key={loc.id} style={{
-                          position: 'absolute', left: `${loc.mapX}%`, top: `${loc.mapY}%`, transform: 'translate(-50%, -50%)',
-                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
-                          cursor: 'pointer', transition: 'all 0.2s',
-                          opacity: isAccessible ? 1 : 0.4,
-                        }} onClick={() => setSelectedMapLocation(loc.id)}
-                          onMouseEnter={(e) => { e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.3)'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1)'; }}>
-                          <div style={{ fontSize: loc.id === currentLocation ? '16px' : '12px', filter: loc.id === currentLocation ? 'drop-shadow(0 0 4px #ff0)' : 'none' }}>
-                            {getIcon()}
-                          </div>
-                          <div style={{ 
-                            fontSize: '6px', color: getColor(), 
-                            textShadow: loc.id === currentLocation ? '0 0 4px #ff0' : 'none',
-                            whiteSpace: 'nowrap',
-                            background: '#0a0a1a',
-                            padding: '1px 3px',
-                            borderRadius: '2px',
-                          }}>
-                            {loc.name}
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {/* Контейнер карты с возможностью перетаскивания */}
+                    <div style={{ 
+                      position: 'absolute', 
+                      top: '30px', 
+                      left: '0', 
+                      right: '0', 
+                      bottom: '0',
+                      overflow: 'auto',
+                      cursor: 'grab',
+                    }}>
+                      <div style={{ 
+                        position: 'relative', 
+                        width: '100%', 
+                        height: '100%',
+                        minWidth: '400px',
+                        minHeight: '300px',
+                      }}>
+                        {/* SVG линии связей */}
+                        <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+                          {Object.values(LOCATIONS).map(loc => loc.connectedTo.map(cId => {
+                            const cLoc = LOCATIONS[cId]; if (!cLoc) return null;
+                            const isCurrentRoute = (loc.id === currentLocation && cId === selectedMapLocation) || 
+                                                 (cId === currentLocation && loc.id === selectedMapLocation);
+                            const isConnected = loc.id === currentLocation || cId === currentLocation;
+                            return <line key={`${loc.id}-${cId}`} 
+                              x1={`${loc.mapX}%`} y1={`${loc.mapY}%`} 
+                              x2={`${cLoc.mapX}%`} y2={`${cLoc.mapY}%`} 
+                              stroke={isCurrentRoute ? '#6cf' : isConnected ? '#444' : '#222'} 
+                              strokeWidth={isCurrentRoute ? '3' : isConnected ? '1.5' : '1'} 
+                              strokeDasharray={isCurrentRoute ? '5,5' : 'none'}
+                              style={{ transition: 'all 0.3s' }} />;
+                          }))}
+                        </svg>
+                        
+                        {/* Точки локаций */}
+                        {Object.values(LOCATIONS).map(loc => {
+                          const getIcon = () => {
+                            if (loc.id === currentLocation) return '📍';
+                            switch(loc.tags.type) {
+                              case 'city': return '🏰';
+                              case 'camp': return '⛺';
+                              case 'dungeon': return '🏛️';
+                              case 'continent': return '🌍';
+                              case 'special': return '✨';
+                              default: return '⚔️';
+                            }
+                          };
+                          
+                          const getColor = () => {
+                            if (loc.id === currentLocation) return '#ff0';
+                            switch(loc.tags.type) {
+                              case 'city': return '#6cf';
+                              case 'camp': return '#6f6';
+                              case 'dungeon': return '#f66';
+                              case 'continent': return '#c6f';
+                              case 'special': return '#fc6';
+                              default: return '#f86';
+                            }
+                          };
+                          
+                          const isAccessible = location?.connectedTo.includes(loc.id) || loc.id === currentLocation;
+                          const isSelected = selectedMapLocation === loc.id;
+                          const isCurrent = loc.id === currentLocation;
+                          
+                          return (
+                            <div key={loc.id} style={{
+                              position: 'absolute', 
+                              left: `${loc.mapX}%`, 
+                              top: `${loc.mapY}%`, 
+                              transform: 'translate(-50%, -50%)',
+                              display: 'flex', 
+                              flexDirection: 'column', 
+                              alignItems: 'center', 
+                              gap: '3px',
+                              cursor: isAccessible ? 'pointer' : 'not-allowed',
+                              transition: 'all 0.3s ease',
+                              opacity: isAccessible ? 1 : 0.3,
+                              zIndex: isSelected ? 15 : isCurrent ? 10 : 5,
+                            }} 
+                            onClick={() => isAccessible && setSelectedMapLocation(loc.id)}
+                            onMouseEnter={(e) => { 
+                              if (isAccessible) {
+                                e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.4)';
+                                e.currentTarget.style.zIndex = '20';
+                              }
+                            }}
+                            onMouseLeave={(e) => { 
+                              e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1)';
+                              e.currentTarget.style.zIndex = isSelected ? '15' : isCurrent ? '10' : '5';
+                            }}>
+                              
+                              {/* Пульсирующий круг для текущей локации */}
+                              {isCurrent && (
+                                <div style={{
+                                  position: 'absolute',
+                                  width: '30px',
+                                  height: '30px',
+                                  borderRadius: '50%',
+                                  border: '2px solid #ff0',
+                                  animation: 'pulse 2s infinite',
+                                  opacity: 0.5,
+                                }} />
+                              )}
+                              
+                              {/* Иконка локации */}
+                              <div style={{ 
+                                fontSize: isCurrent ? '20px' : isSelected ? '18px' : '14px', 
+                                filter: isCurrent ? 'drop-shadow(0 0 6px #ff0)' : isSelected ? 'drop-shadow(0 0 4px #6cf)' : 'none',
+                                transition: 'all 0.3s',
+                              }}>
+                                {getIcon()}
+                              </div>
+                              
+                              {/* Название локации */}
+                              <div style={{ 
+                                fontSize: '7px', 
+                                color: getColor(), 
+                                textShadow: isCurrent ? '0 0 6px #ff0' : isSelected ? '0 0 4px #6cf' : 'none',
+                                whiteSpace: 'nowrap',
+                                background: isSelected || isCurrent ? '#0a0a1a' : 'rgba(10, 10, 26, 0.8)',
+                                padding: '2px 5px',
+                                borderRadius: '3px',
+                                border: isSelected ? '1px solid #6cf' : isCurrent ? '1px solid #ff0' : '1px solid transparent',
+                                fontWeight: isCurrent || isSelected ? 'bold' : 'normal',
+                                transition: 'all 0.3s',
+                              }}>
+                                {loc.name}
+                              </div>
+                              
+                              {/* Индикатор опасности */}
+                              {loc.tags.dangerLevel > 0 && (
+                                <div style={{
+                                  fontSize: '6px',
+                                  color: '#f66',
+                                  background: 'rgba(10, 10, 26, 0.9)',
+                                  padding: '1px 3px',
+                                  borderRadius: '2px',
+                                }}>
+                                  ⚠️{loc.tags.dangerLevel}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
 
                     {selectedMapLocation && (() => {
                       const selectedLoc = LOCATIONS[selectedMapLocation];
                       if (!selectedLoc) return null;
                       const canTravel = location?.connectedTo.includes(selectedMapLocation);
+                      const isCurrent = selectedMapLocation === currentLocation;
                       
                       const getTypeName = () => {
                         switch(selectedLoc.tags.type) {
@@ -641,53 +731,126 @@ function App() {
                         }
                       };
                       
+                      const getConnectedNames = () => {
+                        return selectedLoc.connectedTo.map(id => {
+                          const loc = LOCATIONS[id];
+                          return loc ? loc.name : id;
+                        }).join(', ');
+                      };
+                      
                       return (
-                        <div className="fade-in" style={{ position: 'absolute', bottom: '8px', left: '8px', right: '8px', background: '#0a0a1a', border: '1px solid #6cf', padding: '10px', fontSize: '9px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                            <span style={{ color: '#6cf', fontSize: '10px' }}>{selectedLoc.name}</span>
-                            <button className="btn" style={{ fontSize: '7px', padding: '2px 6px' }} onClick={() => setSelectedMapLocation(null)}>✕ Назад</button>
-                          </div>
-                          <div style={{ color: '#888', fontSize: '8px', marginBottom: '4px' }}>{getTypeName()}</div>
-                          <div style={{ color: '#e0e0e0', marginBottom: '8px', fontSize: '8px', lineHeight: '1.4' }}>{selectedLoc.description}</div>
-                          
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '8px', fontSize: '8px' }}>
+                        <div className="fade-in" style={{ 
+                          position: 'absolute', 
+                          bottom: '8px', 
+                          left: '8px', 
+                          right: '8px', 
+                          background: 'rgba(10, 10, 26, 0.95)', 
+                          border: isCurrent ? '2px solid #ff0' : '2px solid #6cf', 
+                          borderRadius: '4px',
+                          padding: '12px', 
+                          fontSize: '9px',
+                          boxShadow: isCurrent ? '0 0 12px rgba(255, 255, 0, 0.3)' : '0 0 12px rgba(102, 204, 255, 0.3)',
+                          maxHeight: '200px',
+                          overflowY: 'auto',
+                        }}>
+                          {/* Заголовок */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '6px' }}>
                             <div>
-                              <div style={{ color: '#6cf', marginBottom: '2px' }}>⚠️ Опасность:</div>
-                              <div style={{ color: '#f66' }}>{'⚠️'.repeat(selectedLoc.tags.dangerLevel)} ({selectedLoc.tags.dangerLevel}/10)</div>
+                              <div style={{ color: isCurrent ? '#ff0' : '#6cf', fontSize: '11px', fontWeight: 'bold' }}>{selectedLoc.name}</div>
+                              <div style={{ color: '#888', fontSize: '8px', marginTop: '2px' }}>{getTypeName()}</div>
                             </div>
-                            <div>
-                              <div style={{ color: '#6cf', marginBottom: '2px' }}>🔗 Связи:</div>
-                              <div style={{ color: '#e0e0e0' }}>{selectedLoc.connectedTo.length} локации</div>
-                            </div>
+                            <button className="btn" style={{ fontSize: '8px', padding: '3px 8px' }} onClick={() => setSelectedMapLocation(null)}>✕</button>
                           </div>
                           
-                          {selectedLoc.enemies.length > 0 && (
-                            <div style={{ marginBottom: '6px', fontSize: '8px' }}>
-                              <div style={{ color: '#f66', marginBottom: '2px' }}>👹 Враги:</div>
-                              <div style={{ color: '#e0e0e0' }}>{selectedLoc.enemies.map(eId => ENEMIES[eId]?.name).join(', ')}</div>
-                            </div>
-                          )}
+                          {/* Описание */}
+                          <div style={{ color: '#e0e0e0', marginBottom: '10px', fontSize: '8px', lineHeight: '1.5', fontStyle: 'italic' }}>
+                            {selectedLoc.description}
+                          </div>
                           
-                          {selectedLoc.resources.length > 0 && (
-                            <div style={{ marginBottom: '6px', fontSize: '8px' }}>
-                              <div style={{ color: '#6f6', marginBottom: '2px' }}>📦 Ресурсы:</div>
-                              <div style={{ color: '#e0e0e0' }}>{selectedLoc.resources.map(rId => ITEMS[rId]?.name).join(', ')}</div>
-                            </div>
-                          )}
-                          
-                          {selectedMapLocation === currentLocation ? 
-                            <div style={{ color: '#ff0', fontSize: '9px', textAlign: 'center', padding: '4px', background: '#1a1a0a', border: '1px solid #ff0' }}>
-                              📍 Ты здесь
-                            </div> :
-                            canTravel ? 
-                              <button className="btn success" style={{ fontSize: '9px', padding: '6px 12px', width: '100%' }} 
-                                onClick={() => { game.travel(selectedMapLocation); setSelectedMapLocation(null); }}>
-                                → Отправиться в {selectedLoc.name}
-                              </button> :
-                              <div style={{ color: '#555', fontSize: '8px', textAlign: 'center', padding: '4px', background: '#0a0a0a' }}>
-                                🔒 Нет прямого пути (нужно идти через связанные локации)
+                          {/* Статистика */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px', fontSize: '8px' }}>
+                            <div style={{ background: '#0a0a1a', padding: '6px', borderRadius: '3px', border: '1px solid #333' }}>
+                              <div style={{ color: '#f66', marginBottom: '3px', fontSize: '7px' }}>⚠️ ОПАСНОСТЬ</div>
+                              <div style={{ color: '#fff', fontSize: '10px' }}>
+                                {'⚠️'.repeat(Math.min(selectedLoc.tags.dangerLevel, 5))}
+                                <span style={{ fontSize: '8px', marginLeft: '4px' }}>({selectedLoc.tags.dangerLevel}/10)</span>
                               </div>
-                          }
+                            </div>
+                            <div style={{ background: '#0a0a1a', padding: '6px', borderRadius: '3px', border: '1px solid #333' }}>
+                              <div style={{ color: '#6cf', marginBottom: '3px', fontSize: '7px' }}>🔗 СВЯЗИ</div>
+                              <div style={{ color: '#fff', fontSize: '10px' }}>{selectedLoc.connectedTo.length}</div>
+                            </div>
+                          </div>
+                          
+                          {/* Связанные локации */}
+                          <div style={{ marginBottom: '8px', fontSize: '8px' }}>
+                            <div style={{ color: '#6cf', marginBottom: '3px', fontSize: '7px' }}>🗺️ ДОСТУПНЫЕ МАРШРУТЫ:</div>
+                            <div style={{ color: '#e0e0e0', fontSize: '7px', lineHeight: '1.6' }}>
+                              {getConnectedNames()}
+                            </div>
+                          </div>
+                          
+                          {/* Враги */}
+                          {selectedLoc.enemies.length > 0 && (
+                            <div style={{ marginBottom: '8px', fontSize: '8px' }}>
+                              <div style={{ color: '#f66', marginBottom: '3px', fontSize: '7px' }}>👹 ВРАГИ:</div>
+                              <div style={{ color: '#e0e0e0', fontSize: '7px', lineHeight: '1.6' }}>
+                                {selectedLoc.enemies.slice(0, 5).map(eId => ENEMIES[eId]?.name).join(', ')}
+                                {selectedLoc.enemies.length > 5 && <span style={{ color: '#888' }}> +{selectedLoc.enemies.length - 5} ещё</span>}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Ресурсы */}
+                          {selectedLoc.resources.length > 0 && (
+                            <div style={{ marginBottom: '8px', fontSize: '8px' }}>
+                              <div style={{ color: '#6f6', marginBottom: '3px', fontSize: '7px' }}>📦 РЕСУРСЫ:</div>
+                              <div style={{ color: '#e0e0e0', fontSize: '7px', lineHeight: '1.6' }}>
+                                {selectedLoc.resources.slice(0, 5).map(rId => ITEMS[rId]?.name).join(', ')}
+                                {selectedLoc.resources.length > 5 && <span style={{ color: '#888' }}> +{selectedLoc.resources.length - 5} ещё</span>}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Кнопка действия */}
+                          <div style={{ marginTop: '10px' }}>
+                            {isCurrent ? 
+                              <div style={{ 
+                                color: '#ff0', 
+                                fontSize: '10px', 
+                                textAlign: 'center', 
+                                padding: '8px', 
+                                background: 'rgba(255, 255, 0, 0.1)', 
+                                border: '1px solid #ff0',
+                                borderRadius: '3px',
+                                fontWeight: 'bold',
+                              }}>
+                                📍 ТЫ ЗДЕСЬ
+                              </div> :
+                              canTravel ? 
+                                <button className="btn success" style={{ 
+                                  fontSize: '10px', 
+                                  padding: '8px 16px', 
+                                  width: '100%',
+                                  fontWeight: 'bold',
+                                }} 
+                                  onClick={() => { game.travel(selectedMapLocation); setSelectedMapLocation(null); }}>
+                                  → ОТПРАВИТЬСЯ В {selectedLoc.name.toUpperCase()}
+                                </button> :
+                                <div style={{ 
+                                  color: '#888', 
+                                  fontSize: '8px', 
+                                  textAlign: 'center', 
+                                  padding: '8px', 
+                                  background: '#0a0a0a',
+                                  border: '1px solid #333',
+                                  borderRadius: '3px',
+                                }}>
+                                  🔒 Нет прямого пути<br/>
+                                  <span style={{ fontSize: '7px', color: '#666' }}>Иди через связанные локации</span>
+                                </div>
+                            }
+                          </div>
                         </div>
                       );
                     })()}
