@@ -43,6 +43,9 @@ function App() {
   const [rightBottomTab, setRightBottomTab] = useState('study');
   const [showMap, setShowMap] = useState(false);
   const [selectedMapLocation, setSelectedMapLocation] = useState<LocationId | null>(null);
+  const [showSpellList, setShowSpellList] = useState(false);
+  const [renamingSlot, setRenamingSlot] = useState<number | null>(null);
+  const [newSpellName, setNewSpellName] = useState('');
 
   const battleLogRef = useRef<HTMLDivElement>(null);
   const eventLogRef = useRef<HTMLDivElement>(null);
@@ -333,15 +336,36 @@ function App() {
                   <div className="battle-actions-grid">
                     <button className="btn" disabled={!battle.active || !battle.playerTurn || !battle.selectedBodyPart}
                       onClick={() => battle.selectedBodyPart && game.playerAttack(battle.selectedBodyPart)}>⚔️ Атака</button>
-                    <button className="btn" disabled={!battle.active || !battle.playerTurn || !battle.selectedBodyPart || hero.spellSlots[1]?.mpCost === 0}
-                      onClick={() => battle.selectedBodyPart && game.castSpell(1, battle.selectedBodyPart)}>🔮 Слот 2</button>
+                    <button className="btn" disabled={!battle.active || !battle.playerTurn}
+                      onClick={() => setShowSpellList(!showSpellList)}>🔮 Магия</button>
                     <button className="btn" disabled={!battle.active || !battle.playerTurn} onClick={() => game.useItem(0)}>🧪 Предмет</button>
                     <button className="btn" disabled={!battle.active || !battle.playerTurn} onClick={game.flee}>🏃 Побег</button>
                   </div>
-                  {battle.active && hero.spellSlots[0]?.runes.length > 0 && (
-                    <button className="btn success" disabled={!battle.playerTurn} onClick={() => game.castSpell(0)} style={{ fontSize: '8px' }}>
-                      ✨ Слот 1 (на себя) [{hero.spellSlots[0].mpCost} MP]
-                    </button>
+
+                  {/* Раскрывающийся список магии */}
+                  {showSpellList && battle.active && (
+                    <div style={{ border: '1px solid #6cf', padding: '6px', background: '#050510', marginTop: '4px' }}>
+                      <div style={{ fontSize: '8px', color: '#6cf', marginBottom: '4px' }}>Выбери заклинание:</div>
+                      {hero.spellSlots.slice(0, game.getMaxSlots(hero.level)).map((slot, idx) => {
+                        if (slot.mpCost === 0) return null;
+                        const displayName = slot.customName || slot.name;
+                        const masteryStars = '★'.repeat(slot.masteryLevel || 1);
+                        return (
+                          <button key={idx} className="btn" style={{ fontSize: '7px', width: '100%', marginBottom: '2px', textAlign: 'left' }}
+                            disabled={!battle.playerTurn || hero.currentMp < slot.mpCost}
+                            onClick={() => {
+                              if (slot.target === 'self') {
+                                game.castSpell(idx);
+                              } else if (battle.selectedBodyPart) {
+                                game.castSpell(idx, battle.selectedBodyPart);
+                              }
+                              setShowSpellList(false);
+                            }}>
+                            {slot.target === 'self' ? '✨' : '⚔️'} {displayName} [{slot.mpCost} MP] <span style={{ color: '#fc6' }}>{masteryStars}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
                   <div className="battle-actions-hint">{battle.active ? `Ход: ${battle.turn} | ${battle.playerTurn ? 'Твой ход' : 'Ход врага...'}` : '// нет боя'}</div>
                 </div>
@@ -480,7 +504,7 @@ function App() {
                   <div style={{ color: '#6cf', fontSize: '9px', letterSpacing: '1px', borderBottom: '1px dashed #333', paddingBottom: '4px' }}>
                     // КОНСТРУКТОР МАГИИ [ОЧСМ: {hero.osmMax}]
                   </div>
-                  {hero.spellSlots.map((slot, idx) => (
+                  {hero.spellSlots.slice(0, game.getMaxSlots(hero.level)).map((slot, idx) => (
                     <div key={idx} style={{ border: '1px solid #333', padding: '10px', background: '#050510' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                         <div style={{ fontSize: '9px', color: '#6cf' }}>Слот {idx + 1}</div>
@@ -489,16 +513,70 @@ function App() {
                       {slot.mpCost === 0 ? (
                         <div className="placeholder" style={{ marginBottom: '6px' }}>Пусто</div>
                       ) : (
-                        <div style={{ fontSize: '8px', color: '#e0e0e0', marginBottom: '6px' }}>
-                          {slot.target === 'self' ? `✨ На себя (${slot.runes.length} рун)` :
-                            `⚔️ На врага: ${slot.element} / ${slot.trajectory}${slot.form ? ` / ${SPELL_FORMS[slot.form]?.name || ''}` : ''}${slot.scrollEffect ? ` / ${SCROLL_EFFECTS[slot.scrollEffect]?.name || ''}` : ''}`}
-                        </div>
+                        <>
+                          {/* Имя магии */}
+                          {renamingSlot === idx ? (
+                            <div style={{ marginBottom: '6px' }}>
+                              <input
+                                type="text"
+                                value={newSpellName}
+                                onChange={(e) => setNewSpellName(e.target.value)}
+                                placeholder="Введи имя..."
+                                style={{ width: '100%', fontSize: '8px', padding: '4px', background: '#0a0a1a', border: '1px solid #6cf', color: '#fff', fontFamily: 'inherit' }}
+                                maxLength={20}
+                              />
+                              <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+                                <button className="btn success" style={{ fontSize: '7px', flex: 1 }} onClick={() => {
+                                  if (newSpellName.trim()) {
+                                    game.renameSpell(idx, newSpellName.trim());
+                                    setRenamingSlot(null);
+                                    setNewSpellName('');
+                                  }
+                                }}>✓</button>
+                                <button className="btn danger" style={{ fontSize: '7px', flex: 1 }} onClick={() => {
+                                  setRenamingSlot(null);
+                                  setNewSpellName('');
+                                }}>✕</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: '9px', color: '#fff', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>{slot.customName || slot.name}</span>
+                              <button className="btn" style={{ fontSize: '7px', padding: '2px 6px' }} onClick={() => {
+                                setRenamingSlot(idx);
+                                setNewSpellName(slot.customName || '');
+                              }}>✎</button>
+                            </div>
+                          )}
+
+                          {/* Мастерство */}
+                          {slot.masteryLevel && slot.masteryLevel > 0 && (
+                            <div style={{ fontSize: '7px', color: '#fc6', marginBottom: '4px' }}>
+                              Мастерство: {'★'.repeat(slot.masteryLevel)}{'☆'.repeat(7 - slot.masteryLevel)} (ур. {slot.masteryLevel}/7)
+                            </div>
+                          )}
+
+                          <div style={{ fontSize: '8px', color: '#e0e0e0', marginBottom: '6px' }}>
+                            {slot.target === 'self' ? `✨ На себя (${slot.runes.length} рун)` :
+                              `⚔️ На врага: ${slot.element} / ${slot.trajectory}${slot.form ? ` / ${SPELL_FORMS[slot.form]?.name || ''}` : ''}${slot.scrollEffect ? ` / ${SCROLL_EFFECTS[slot.scrollEffect]?.name || ''}` : ''}`}
+                          </div>
+                          {slot.totalCasts > 0 && (
+                            <div style={{ fontSize: '7px', color: '#888', marginBottom: '4px' }}>
+                              Кастов: {slot.totalCasts}
+                            </div>
+                          )}
+                        </>
                       )}
                       <button className="btn" style={{ fontSize: '8px', width: '100%' }} onClick={() => { game.startBuild(idx); setLeftTab('interaction'); }}>
                         {slot.mpCost === 0 ? '✦ Создать' : '✎ Изменить'}
                       </button>
                     </div>
                   ))}
+                  {hero.level < 25 && (
+                    <div className="placeholder" style={{ marginTop: '8px', fontSize: '8px' }}>
+                      🔒 Следующий слот откроется на уровне {game.getMaxSlots(hero.level) < 7 ? [5, 10, 15, 20, 25][game.getMaxSlots(hero.level) - 2] : 'макс'}
+                    </div>
+                  )}
                   <div className="placeholder" style={{ marginTop: '8px' }}>
                     Нажми "Создать" → откроется вкладка Взаимодействие.
                   </div>

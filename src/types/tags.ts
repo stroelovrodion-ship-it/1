@@ -101,6 +101,7 @@ export interface Rune {
 
 export interface SpellSlot {
   name: string;
+  customName?: string; // пользовательское имя магии
   target: 'self' | 'enemy';
   // Для "на себя" — руны
   runes: string[];
@@ -110,6 +111,39 @@ export interface SpellSlot {
   form?: string; // id формы из свитка
   scrollEffect?: string; // id доп.эффекта из свитка
   mpCost: number;
+  // Прогрессия
+  formLevel: number; // уровень формы (1-5)
+  effectLevel: number; // уровень эффекта (1-3)
+  totalCasts: number; // всего кастов
+  masteryLevel: number; // уровень мастерства (1-7)
+}
+
+// Уровень мастерства заклинания
+export interface MasteryLevel {
+  level: number;
+  castsRequired: number;
+  damageBonusPct: number;
+  mpDiscountPct: number;
+  critBonusPct: number;
+  specialPerk?: string;
+}
+
+// Уровни формы
+export interface FormLevel {
+  level: number;
+  damageBonus: number;
+  critBonus: number;
+  mpCost: number;
+  specialEffect?: string;
+}
+
+// Активные дебаффы в бою
+export interface ActiveDebuff {
+  type: EffectType;
+  element: ElementType;
+  value: number;
+  duration: number;
+  source: string;
 }
 
 // Изученные части тела врага
@@ -297,6 +331,7 @@ export interface EnemyInstance {
   buffs: StatusEffect[];
   debuffs: StatusEffect[];
   bodyPartDamage: Record<BodyPart, number>; // урон по частям
+  activeDebuffs?: ActiveDebuff[]; // активные дебаффы по элементам
 }
 
 export interface StatusEffect {

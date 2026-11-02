@@ -3,7 +3,7 @@ import {
   GameState, HeroState, EventLogEntry,
   SlotType, EnemyInstance,
   BattleLogEntry, LocationId, BodyPart,
-  SpellSlot, ElementType, Trajectory, BestiaryEntry, StudiedBodyPart
+  SpellSlot, ElementType, Trajectory, BestiaryEntry, StudiedBodyPart, EffectType
 } from '../types/tags';
 import { ITEMS } from '../data/items';
 import { ENEMIES } from '../data/enemies';
@@ -28,8 +28,8 @@ function createInitialHero(): HeroState {
       { item: ITEMS.minor_mp_potion, count: 3 },
     ],
     spellSlots: [
-      { name: 'Слот 1', runes: [], target: 'self', mpCost: 0 },
-      { name: 'Слот 2', target: 'enemy', mpCost: 0, runes: [], element: 'fire', trajectory: 'direct' },
+      { name: 'Слот 1', runes: [], target: 'self', mpCost: 0, formLevel: 1, effectLevel: 1, totalCasts: 0, masteryLevel: 1 },
+      { name: 'Слот 2', target: 'enemy', mpCost: 0, runes: [], element: 'fire', trajectory: 'direct', formLevel: 1, effectLevel: 1, totalCasts: 0, masteryLevel: 1 },
     ],
     collectedRunes: ['time_instant', 'effect_fire', 'effect_water'],
     knownScrolls: ['bolt', 'arrow', 'burn', 'frost'],
@@ -186,7 +186,7 @@ export function useGameState() {
     template.bodyParts.forEach((bp: any) => { bodyPartDamage[bp.part] = 0; });
     const enemyInstance: EnemyInstance = {
       template, currentHp: template.baseHp, maxHp: template.baseHp,
-      buffs: [], debuffs: [], bodyPartDamage,
+      buffs: [], debuffs: [], bodyPartDamage, activeDebuffs: [],
     };
     setState(prev => {
       const existingBestiary = prev.hero.bestiary[enemyId];
@@ -251,7 +251,18 @@ export function useGameState() {
     const stats = getEffectiveStats(state.hero);
     const enemy = state.battle.enemy;
 
-    setState(prev => ({ ...prev, hero: { ...prev.hero, currentMp: prev.hero.currentMp - slot.mpCost } }));
+    // Увеличиваем счётчик кастов и проверяем мастерство
+    setState(prev => {
+      const newSlots = [...prev.hero.spellSlots];
+      const newCasts = (newSlots[slotIndex].totalCasts || 0) + 1;
+      const newMastery = getMasteryLevel(newCasts);
+      const oldMastery = newSlots[slotIndex].masteryLevel || 1;
+      newSlots[slotIndex] = { ...newSlots[slotIndex], totalCasts: newCasts, masteryLevel: newMastery };
+      if (newMastery > oldMastery) {
+        addLog(`🏆 Мастерство "${slot.customName || slot.name}" выросло до ур. ${newMastery}!`, 'system');
+      }
+      return { ...prev, hero: { ...prev.hero, currentMp: prev.hero.currentMp - slot.mpCost, spellSlots: newSlots } };
+    });
 
     if (slot.target === 'self') {
       let totalHeal = 0;
@@ -302,11 +313,34 @@ export function useGameState() {
       const newEnemyHp = Math.max(0, enemy.currentHp - finalDmg);
       addBattleLog(`🔮 ${slot.element} в ${part}! Урон: ${finalDmg}`, 'damage');
 
+      // Доп. эффект от свитка (проверяем, не уже ли активен)
       if (slot.scrollEffect && SCROLL_EFFECTS[slot.scrollEffect]) {
         const scroll = SCROLL_EFFECTS[slot.scrollEffect];
-        if (Math.random() * 100 < scroll.chance) {
+        const existingDebuff = enemy.activeDebuffs?.find(d => d.element === scroll.element && d.type === scroll.effect as EffectType);
+        
+        if (existingDebuff) {
+          addBattleLog(`⚠️ ${scroll.name} уже активен! Эффект не применён.`, 'info');
+        } else if (Math.random() * 100 < scroll.chance) {
           const effectDmg = Math.floor(elemPower * scroll.power);
           addBattleLog(`✨ ${scroll.name}! Доп. урон: ${effectDmg}`, 'damage');
+          
+          // Добавляем дебафф
+          setState(prev => {
+            const newEnemy = prev.battle.enemy ? {
+              ...prev.battle.enemy,
+              activeDebuffs: [
+                ...(prev.battle.enemy.activeDebuffs || []),
+                {
+                  type: scroll.effect as EffectType,
+                  element: scroll.element as ElementType,
+                  value: effectDmg,
+                  duration: scroll.level,
+                  source: slot.scrollEffect!,
+                }
+              ]
+            } : null;
+            return { ...prev, battle: { ...prev.battle, enemy: newEnemy } };
+          });
         }
       }
 
@@ -500,8 +534,10 @@ export function useGameState() {
         if (buildState.trajectory && TRAJECTORIES[buildState.trajectory]) mpCost += TRAJECTORIES[buildState.trajectory].mpCost;
         if (buildState.form && SPELL_FORMS[buildState.form]) mpCost += SPELL_FORMS[buildState.form].mpCost - 3;
       }
+      const existingSlot = prev.hero.spellSlots[buildingSlot];
       newSlots[buildingSlot] = {
         name: `Слот ${buildingSlot + 1}`,
+        customName: existingSlot?.customName,
         target: buildState.target,
         runes: buildState.target === 'self' ? buildState.runes : [],
         element: buildState.target === 'enemy' ? buildState.element : undefined,
@@ -509,6 +545,10 @@ export function useGameState() {
         form: buildState.target === 'enemy' ? buildState.form : undefined,
         scrollEffect: buildState.target === 'enemy' ? buildState.scrollEffect : undefined,
         mpCost,
+        formLevel: existingSlot?.formLevel || 1,
+        effectLevel: existingSlot?.effectLevel || 1,
+        totalCasts: existingSlot?.totalCasts || 0,
+        masteryLevel: existingSlot?.masteryLevel || 1,
       };
       return { ...prev, hero: { ...prev.hero, spellSlots: newSlots } };
     });
@@ -536,6 +576,51 @@ export function useGameState() {
   const cancelBuild = useCallback(() => {
     setBuildingSlot(null);
     setInteractionMode('none');
+  }, []);
+
+  // ─── ПЕРЕИМЕНОВАНИЕ МАГИИ ───
+  const renameSpell = useCallback((slotIndex: number, newName: string) => {
+    setState(prev => {
+      const newSlots = [...prev.hero.spellSlots];
+      if (newSlots[slotIndex]) {
+        newSlots[slotIndex] = { ...newSlots[slotIndex], customName: newName };
+      }
+      return { ...prev, hero: { ...prev.hero, spellSlots: newSlots } };
+    });
+    addLog(`✨ Магия переименована: "${newName}"`, 'system');
+  }, [addLog]);
+
+  // ─── СМЕНА МАГИИ В СЛОТЕ ───
+  const swapSpell = useCallback((fromSlot: number, toSlot: number) => {
+    setState(prev => {
+      const newSlots = [...prev.hero.spellSlots];
+      const temp = newSlots[fromSlot];
+      newSlots[fromSlot] = newSlots[toSlot];
+      newSlots[toSlot] = temp;
+      return { ...prev, hero: { ...prev.hero, spellSlots: newSlots } };
+    });
+    addLog('🔄 Магии поменяны местами.', 'system');
+  }, [addLog]);
+
+  // ─── ПОЛУЧИТЬ СЛОТЫ ПО УРОВНЮ ───
+  const getMaxSlots = useCallback((level: number): number => {
+    if (level >= 25) return 7;
+    if (level >= 20) return 6;
+    if (level >= 15) return 5;
+    if (level >= 10) return 4;
+    if (level >= 5) return 3;
+    return 2;
+  }, []);
+
+  // ─── УРОВЕНЬ МАСТЕРСТВА ───
+  const getMasteryLevel = useCallback((casts: number): number => {
+    if (casts >= 500) return 7;
+    if (casts >= 200) return 6;
+    if (casts >= 100) return 5;
+    if (casts >= 50) return 4;
+    if (casts >= 25) return 3;
+    if (casts >= 10) return 2;
+    return 1;
   }, []);
 
   const selectBodyPart = useCallback((part: BodyPart) => {
@@ -569,5 +654,6 @@ export function useGameState() {
     explore, rest, endBattle, addLog, resetGame,
     startBuild, saveBuild, addRuneToBuild, removeRuneFromBuild, cancelBuild,
     selectBodyPart, openBestiaryEntry, openItemInteraction,
+    renameSpell, swapSpell, getMaxSlots, getMasteryLevel,
   };
 }
