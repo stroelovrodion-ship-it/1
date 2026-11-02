@@ -1,19 +1,19 @@
 import { useState, useCallback } from 'react';
 import {
   GameState, HeroState, EventLogEntry,
-  Item, SlotType, EnemyInstance,
+  SlotType, EnemyInstance,
   BattleLogEntry, LocationId, BodyPart,
-  SpellSlot, Rune, ElementType
+  SpellSlot, ElementType, Trajectory, BestiaryEntry, StudiedBodyPart
 } from '../types/tags';
 import { ITEMS } from '../data/items';
 import { ENEMIES } from '../data/enemies';
 import { LOCATIONS } from '../data/locations';
 import { RUNES, SPELL_FORMS, SCROLL_EFFECTS } from '../data/runes';
+import { TRAJECTORIES } from '../data/trajectories';
 
 function createInitialHero(): HeroState {
   return {
-    name: 'Неофит',
-    level: 1, xp: 0, xpToNext: 50, gold: 20,
+    name: 'Неофит', level: 1, xp: 0, xpToNext: 50, gold: 20,
     baseStats: {
       str: 3, agi: 4, int: 5, lck: 3,
       maxHp: 30, maxMp: 20, armor: 0,
@@ -22,20 +22,17 @@ function createInitialHero(): HeroState {
     },
     currentHp: 30, currentMp: 20,
     osm: 4, osmMax: 4,
-    equipped: {
-      head: null, body: null, boots: null, weapon: null,
-      extra: null, artifact: null, ring: null, necklace: null,
-    },
+    equipped: { head: null, body: null, boots: null, weapon: null, extra: null, artifact: null, ring: null, necklace: null },
     inventory: [
       { item: ITEMS.minor_hp_potion, count: 3 },
       { item: ITEMS.minor_mp_potion, count: 2 },
     ],
     spellSlots: [
-      { name: 'Слот 1', runes: [], mpCost: 0, target: 'self' },
-      { name: 'Слот 2', runes: [], mpCost: 0, target: 'enemy' },
+      { name: 'Слот 1', runes: [], target: 'self', mpCost: 0 },
+      { name: 'Слот 2', target: 'enemy', mpCost: 0, runes: [], element: 'fire', trajectory: 'direct' },
     ],
     collectedRunes: ['time_instant', 'effect_fire'],
-    knownScrolls: ['bolt', 'arrow'],
+    knownScrolls: ['bolt', 'arrow', 'burn'],
     bestiary: {},
   };
 }
@@ -62,13 +59,8 @@ function getEffectiveStats(hero: HeroState) {
   return stats;
 }
 
-function rand(min: number, max: number) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-function pickRandom<T extends string>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+function rand(min: number, max: number) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function pickRandom<T extends string>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
 
 function getElementPower(stats: ReturnType<typeof getEffectiveStats>, element: ElementType): number {
   switch (element) {
@@ -82,12 +74,27 @@ function getElementPower(stats: ReturnType<typeof getEffectiveStats>, element: E
   }
 }
 
+function createStudiedParts(template: any): Record<BodyPart, StudiedBodyPart> {
+  const parts: any = {};
+  template.bodyParts.forEach((bp: any) => {
+    parts[bp.part] = { part: bp.part, discovered: false };
+  });
+  return parts;
+}
+
 export function useGameState() {
   const [state, setState] = useState<GameState>(createInitialState);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
-  const [spellBuilder, setSpellBuilder] = useState<{ slotIndex: number; runes: string[]; form: string; scrollEffect: string; targetPart: BodyPart | null; element: ElementType }>({
-    slotIndex: 0, runes: [], form: 'bolt', scrollEffect: '', targetPart: null, element: 'fire'
-  });
+  const [interactionMode, setInteractionMode] = useState<'none' | 'item' | 'bestiary' | 'spellBuilder'>('none');
+  const [buildingSlot, setBuildingSlot] = useState<number | null>(null);
+  const [buildState, setBuildState] = useState<{
+    target: 'self' | 'enemy';
+    runes: string[];
+    element: ElementType;
+    trajectory: Trajectory;
+    form: string;
+    scrollEffect: string;
+  }>({ target: 'self', runes: [], element: 'fire', trajectory: 'direct', form: '', scrollEffect: '' });
 
   const addLog = useCallback((text: string, type: EventLogEntry['type'] = 'system') => {
     setState(prev => ({
@@ -113,8 +120,8 @@ export function useGameState() {
       const newInventory = [...prev.hero.inventory];
       const oldEquipped = prev.hero.equipped[slot];
       if (oldEquipped) {
-        const existingIdx = newInventory.findIndex(i => i.item.id === oldEquipped.id);
-        if (existingIdx >= 0) newInventory[existingIdx] = { ...newInventory[existingIdx], count: newInventory[existingIdx].count + 1 };
+        const idx = newInventory.findIndex(i => i.item.id === oldEquipped.id);
+        if (idx >= 0) newInventory[idx] = { ...newInventory[idx], count: newInventory[idx].count + 1 };
         else newInventory.push({ item: oldEquipped, count: 1 });
       }
       newInventory[invIndex] = { ...invItem, count: invItem.count - 1 };
@@ -128,8 +135,8 @@ export function useGameState() {
       const item = prev.hero.equipped[slot];
       if (!item) return prev;
       const newInventory = [...prev.hero.inventory];
-      const existingIdx = newInventory.findIndex(i => i.item.id === item.id);
-      if (existingIdx >= 0) newInventory[existingIdx] = { ...newInventory[existingIdx], count: newInventory[existingIdx].count + 1 };
+      const idx = newInventory.findIndex(i => i.item.id === item.id);
+      if (idx >= 0) newInventory[idx] = { ...newInventory[idx], count: newInventory[idx].count + 1 };
       else newInventory.push({ item, count: 1 });
       return { ...prev, hero: { ...prev.hero, equipped: { ...prev.hero.equipped, [slot]: null }, inventory: newInventory } };
     });
@@ -142,8 +149,7 @@ export function useGameState() {
       if (!invItem || !invItem.item.tags.consumable) return prev;
       const item = invItem.item;
       const stats = getEffectiveStats(prev.hero);
-      let newHp = prev.hero.currentHp;
-      let newMp = prev.hero.currentMp;
+      let newHp = prev.hero.currentHp, newMp = prev.hero.currentMp;
       if (item.tags.effect === 'heal') {
         if (item.id.includes('mp')) newMp = Math.min(stats.maxMp, newMp + (item.effectValue || 0));
         else newHp = Math.min(stats.maxHp, newHp + (item.effectValue || 0));
@@ -173,33 +179,62 @@ export function useGameState() {
     const enemyId = pickRandom(location.enemies);
     const template = ENEMIES[enemyId];
     if (!template) return;
-    const bodyPartDamage: Record<string, number> = {};
-    template.bodyParts.forEach(bp => { bodyPartDamage[bp.part] = 0; });
+    const bodyPartDamage: any = {};
+    template.bodyParts.forEach((bp: any) => { bodyPartDamage[bp.part] = 0; });
     const enemyInstance: EnemyInstance = {
       template, currentHp: template.baseHp, maxHp: template.baseHp,
-      buffs: [], debuffs: [], bodyPartDamage: bodyPartDamage as Record<BodyPart, number>,
+      buffs: [], debuffs: [], bodyPartDamage,
     };
-    setState(prev => ({
-      ...prev,
-      battle: { active: true, enemy: enemyInstance, log: [], turn: 1, playerTurn: true, selectedBodyPart: null },
-      hero: { ...prev.hero, bestiary: { ...prev.hero.bestiary, [enemyId]: { enemyId, kills: prev.hero.bestiary[enemyId]?.kills || 0, discovered: true } } },
-    }));
+    setState(prev => {
+      const existingBestiary = prev.hero.bestiary[enemyId];
+      return {
+        ...prev,
+        battle: { active: true, enemy: enemyInstance, log: [], turn: 1, playerTurn: true, selectedBodyPart: null },
+        hero: {
+          ...prev.hero,
+          bestiary: {
+            ...prev.hero.bestiary,
+            [enemyId]: existingBestiary
+              ? { ...existingBestiary, discovered: true }
+              : { enemyId, kills: 0, discovered: true, studiedParts: createStudiedParts(template) },
+          },
+        },
+      };
+    });
     addLog(`⚔️ Встречен: ${template.name}!`, 'combat');
     addBattleLog(`Появляется ${template.name} (Ур. ${template.level})`, 'system');
   }, [state.currentLocation, addLog, addBattleLog]);
 
-  // ─── АТАКА (базовая — по выбранной части тела) ───
+  // ─── ИЗУЧЕНИЕ ЧАСТИ ТЕЛА (при атаке элементом) ───
+  const studyBodyPart = useCallback((enemyId: string, part: BodyPart, element: ElementType) => {
+    setState(prev => {
+      const entry = prev.hero.bestiary[enemyId];
+      if (!entry) return prev;
+      const template = ENEMIES[enemyId];
+      if (!template) return prev;
+      const bpData = template.bodyParts.find(bp => bp.part === part);
+      if (!bpData) return prev;
+      const studiedParts = { ...entry.studiedParts };
+      studiedParts[part] = {
+        part,
+        discovered: true,
+        weakness: bpData.weakness,
+        resistance: bpData.resistance,
+      };
+      return {
+        ...prev,
+        hero: { ...prev.hero, bestiary: { ...prev.hero.bestiary, [enemyId]: { ...entry, studiedParts } } },
+      };
+    });
+  }, []);
+
+  // ─── АТАКА ───
   const playerAttack = useCallback((targetPart: BodyPart) => {
     if (!state.battle.active || !state.battle.enemy || !state.battle.playerTurn) return;
     const stats = getEffectiveStats(state.hero);
     const enemy = state.battle.enemy;
-    const bpData = enemy.template.bodyParts.find(bp => bp.part === targetPart);
     let baseDmg = stats.str + rand(0, 2);
-    let multiplier = 1;
-    // Базовая атака не имеет стихии, но всё равно проверяем общие модификаторы
-    if (bpData?.weakness) { multiplier = 1.1; addBattleLog(`💡 Эта часть уязвима! x1.1`, 'info'); }
-    if (bpData?.resistance) { multiplier = 0.9; addBattleLog(`🛡 Эта часть защищена! x0.9`, 'info'); }
-    const finalDmg = Math.max(1, Math.floor((baseDmg - Math.floor(enemy.template.armor / 2)) * multiplier));
+    const finalDmg = Math.max(1, baseDmg - Math.floor(enemy.template.armor / 2));
     const newEnemyHp = Math.max(0, enemy.currentHp - finalDmg);
     addBattleLog(`Атака в ${targetPart}! Урон: ${finalDmg}`, 'damage');
     const newBodyPartDmg = { ...enemy.bodyPartDamage, [targetPart]: (enemy.bodyPartDamage[targetPart] || 0) + finalDmg };
@@ -215,35 +250,22 @@ export function useGameState() {
   const castSpell = useCallback((slotIndex: number, targetPart?: BodyPart) => {
     if (!state.battle.active || !state.battle.enemy || !state.battle.playerTurn) return;
     const slot = state.hero.spellSlots[slotIndex];
-    if (!slot || slot.runes.length === 0) { addBattleLog('Слот пуст!', 'info'); return; }
+    if (!slot) return;
     if (state.hero.currentMp < slot.mpCost) { addBattleLog('Недостаточно маны!', 'info'); return; }
 
     const stats = getEffectiveStats(state.hero);
     const enemy = state.battle.enemy;
 
-    // Рассчитываем урон/эффект по рунам
-    let totalDamage = 0;
-    let totalHeal = 0;
-    let element: ElementType = 'none';
-    let effect: string | undefined;
-    let effectChance = 0;
-
-    slot.runes.forEach(runeId => {
-      const rune = RUNES[runeId];
-      if (!rune) return;
-      if (rune.element) element = rune.element;
-      if (rune.effect) effect = rune.effect;
-      if (rune.chance) effectChance = Math.max(effectChance, rune.chance);
-      if (rune.type === 'effect' || rune.type === 'unique') {
-        const elemPower = getElementPower(stats, rune.element || 'none');
-        totalDamage += rune.value + elemPower * 2;
-        if (rune.effect === 'heal') { totalHeal = rune.value + Math.floor(stats.int * 1.5); totalDamage = 0; }
-      }
-    });
-
     setState(prev => ({ ...prev, hero: { ...prev.hero, currentMp: prev.hero.currentMp - slot.mpCost } }));
 
     if (slot.target === 'self') {
+      // Заклинание на себя — руны
+      let totalHeal = 0;
+      slot.runes.forEach(runeId => {
+        const rune = RUNES[runeId];
+        if (!rune) return;
+        if (rune.effect === 'heal') totalHeal += rune.value + Math.floor(stats.int * 1.5);
+      });
       if (totalHeal > 0) {
         const maxHp = getEffectiveStats(state.hero).maxHp;
         const newHp = Math.min(maxHp, state.hero.currentHp + totalHeal);
@@ -255,24 +277,49 @@ export function useGameState() {
       }
       setTimeout(() => enemyTurn(), 800);
     } else {
-      // На врага — нужна часть тела
+      // Заклинание на врага — конструктор
       const part = targetPart || state.battle.selectedBodyPart;
       if (!part) { addBattleLog('Выбери часть тела!', 'info'); return; }
+      if (!slot.element) { addBattleLog('Нет элемента!', 'info'); return; }
 
-      const bpData = enemy.template.bodyParts.find(bp => bp.part === part);
-      let multiplier = 1;
-      if (element !== 'none') {
-        if (bpData?.weakness === element) { multiplier = 1.5; addBattleLog(`💥 ОБНАРУЖЕНА СЛАБОСТЬ к ${element}! x1.5 урон!`, 'info'); }
-        else if (bpData?.resistance === element) { multiplier = 0.5; addBattleLog(`🛡 ОБНАРУЖЕНО СОПРОТИВЛЕНИЕ к ${element}! x0.5 урон...`, 'info'); }
+      const elemPower = getElementPower(stats, slot.element);
+      let baseDmg = 5 + elemPower * 2;
+
+      // Форма
+      if (slot.form && SPELL_FORMS[slot.form]) {
+        baseDmg += SPELL_FORMS[slot.form].damageBonus;
       }
 
-      const finalDmg = Math.max(1, Math.floor(totalDamage * multiplier));
-      const newEnemyHp = Math.max(0, enemy.currentHp - finalDmg);
-      addBattleLog(`Заклинание в ${part}! ${element} урон: ${finalDmg}`, 'damage');
+      // Траектория
+      if (slot.trajectory && TRAJECTORIES[slot.trajectory]) {
+        baseDmg = Math.floor(baseDmg * TRAJECTORIES[slot.trajectory].damageMultiplier);
+      }
 
-      // Доп.эффект
-      if (effect && Math.random() * 100 < effectChance) {
-        addBattleLog(`Эффект ${effect} сработал!`, 'info');
+      // Проверка слабости/сопротивления
+      const bpData = enemy.template.bodyParts.find(bp => bp.part === part);
+      let multiplier = 1;
+      if (bpData?.weakness === slot.element) {
+        multiplier = 1.5;
+        addBattleLog(`💥 СЛАБОСТЬ к ${slot.element}! x1.5`, 'info');
+        // Изучаем часть тела
+        studyBodyPart(enemy.template.id, part, slot.element);
+      } else if (bpData?.resistance === slot.element) {
+        multiplier = 0.5;
+        addBattleLog(`🛡 СОПРОТИВЛЕНИЕ к ${slot.element}! x0.5`, 'info');
+        studyBodyPart(enemy.template.id, part, slot.element);
+      }
+
+      const finalDmg = Math.max(1, Math.floor(baseDmg * multiplier));
+      const newEnemyHp = Math.max(0, enemy.currentHp - finalDmg);
+      addBattleLog(`${slot.element} в ${part}! Урон: ${finalDmg}`, 'damage');
+
+      // Доп. эффект от свитка
+      if (slot.scrollEffect && SCROLL_EFFECTS[slot.scrollEffect]) {
+        const scroll = SCROLL_EFFECTS[slot.scrollEffect];
+        if (Math.random() * 100 < scroll.chance) {
+          const effectDmg = Math.floor(elemPower * scroll.power);
+          addBattleLog(`✨ ${scroll.name}! Доп. урон: ${effectDmg}`, 'damage');
+        }
       }
 
       const newBodyPartDmg = { ...enemy.bodyPartDamage, [part]: (enemy.bodyPartDamage[part] || 0) + finalDmg };
@@ -284,7 +331,7 @@ export function useGameState() {
       if (newEnemyHp <= 0) setTimeout(() => endBattle(true), 600);
       else setTimeout(() => enemyTurn(), 800);
     }
-  }, [state.battle, state.hero, addBattleLog]);
+  }, [state.battle, state.hero, addBattleLog, studyBodyPart]);
 
   // ─── ХОД ВРАГА ───
   const enemyTurn = useCallback(() => {
@@ -292,15 +339,14 @@ export function useGameState() {
       if (!prev.battle.enemy || prev.battle.enemy.currentHp <= 0) return prev;
       const enemy = prev.battle.enemy;
       const stats = getEffectiveStats(prev.hero);
-      const dodgeChance = stats.agi * 3;
-      if (rand(1, 100) <= dodgeChance) {
+      if (rand(1, 100) <= stats.agi * 3) {
         return { ...prev, battle: { ...prev.battle, log: [...prev.battle.log, { text: `${enemy.template.name} промахивается!`, type: 'info' as const, turn: prev.battle.turn }], playerTurn: true, turn: prev.battle.turn + 1 } };
       }
       const finalDmg = Math.max(1, enemy.template.baseDamage + rand(-1, 2) - Math.floor(stats.armor / 2));
       const newHp = Math.max(0, prev.hero.currentHp - finalDmg);
       const newLog: BattleLogEntry = { text: `${enemy.template.name} атакует! Урон: ${finalDmg}`, type: 'damage', turn: prev.battle.turn };
       if (newHp <= 0) {
-        return { ...prev, hero: { ...prev.hero, currentHp: 0 }, battle: { ...prev.battle, log: [...prev.battle.log, newLog], active: false, enemy: null, turn: prev.battle.turn + 1 }, eventLog: [...prev.eventLog, { text: '💀 Ты пал в бою...', type: 'combat' as const, time: prev.gameTime }] };
+        return { ...prev, hero: { ...prev.hero, currentHp: 0 }, battle: { ...prev.battle, log: [...prev.battle.log, newLog], active: false, enemy: null, turn: prev.battle.turn + 1 }, eventLog: [...prev.eventLog, { text: '💀 Ты пал...', type: 'combat' as const, time: prev.gameTime }] };
       }
       return { ...prev, hero: { ...prev.hero, currentHp: newHp }, battle: { ...prev.battle, log: [...prev.battle.log, newLog], playerTurn: true, turn: prev.battle.turn + 1 } };
     });
@@ -331,64 +377,45 @@ export function useGameState() {
         });
 
         // Шанс найти руну
-        const location = LOCATIONS[prev.currentLocation];
-        if (location?.runeDrops && location.runeDrops.length > 0 && Math.random() < 0.2) {
-          const runeId = pickRandom(location.runeDrops);
+        const loc = LOCATIONS[prev.currentLocation];
+        if (loc?.runeDrops && loc.runeDrops.length > 0 && Math.random() < 0.2) {
+          const runeId = pickRandom(loc.runeDrops);
           if (!prev.hero.collectedRunes.includes(runeId)) {
             const rune = RUNES[runeId];
-            if (rune) {
-              addLog(`🔮 Найдена руна: ${rune.name}!`, 'loot');
-              return {
-                ...prev,
-                hero: {
-                  ...prev.hero,
-                  level: prev.hero.level,
-                  xp: prev.hero.xp + xpGained,
-                  gold: prev.hero.gold + goldGained,
-                  inventory: newInventory,
-                  collectedRunes: [...prev.hero.collectedRunes, runeId],
-                  bestiary: { ...prev.hero.bestiary, [enemy.template.id]: { ...prev.hero.bestiary[enemy.template.id], kills: (prev.hero.bestiary[enemy.template.id]?.kills || 0) + 1 } },
-                },
-                battle: { active: false, enemy: null, log: [], turn: 0, playerTurn: true, selectedBodyPart: null },
-              };
+            if (rune) addLog(`🔮 Найдена руна: ${rune.name}!`, 'loot');
+            let newXp = prev.hero.xp + xpGained;
+            let newLevel = prev.hero.level;
+            let newXpToNext = prev.hero.xpToNext;
+            let newBaseStats = { ...prev.hero.baseStats };
+            while (newXp >= newXpToNext) {
+              newXp -= newXpToNext; newLevel++; newXpToNext = Math.floor(newXpToNext * 1.5);
+              newBaseStats = { ...newBaseStats, str: newBaseStats.str + 1, agi: newBaseStats.agi + 1, int: newBaseStats.int + 1, maxHp: newBaseStats.maxHp + 5, maxMp: newBaseStats.maxMp + 3,
+                firePower: newBaseStats.firePower + (Math.random() < 0.3 ? 1 : 0), waterPower: newBaseStats.waterPower + (Math.random() < 0.3 ? 1 : 0),
+                earthPower: newBaseStats.earthPower + (Math.random() < 0.3 ? 1 : 0), airPower: newBaseStats.airPower + (Math.random() < 0.3 ? 1 : 0),
+                lightPower: newBaseStats.lightPower + (Math.random() < 0.3 ? 1 : 0), darkPower: newBaseStats.darkPower + (Math.random() < 0.3 ? 1 : 0) };
+              addLog(`⬆️ Уровень ${newLevel}!`, 'system');
             }
+            return { ...prev, hero: { ...prev.hero, level: newLevel, xp: newXp, xpToNext: newXpToNext, gold: prev.hero.gold + goldGained, baseStats: newBaseStats, osmMax: 4 + (newLevel - 1) * 2, inventory: newInventory, collectedRunes: [...prev.hero.collectedRunes, runeId],
+              bestiary: { ...prev.hero.bestiary, [enemy.template.id]: { ...prev.hero.bestiary[enemy.template.id], kills: (prev.hero.bestiary[enemy.template.id]?.kills || 0) + 1 } } },
+              battle: { active: false, enemy: null, log: [], turn: 0, playerTurn: true, selectedBodyPart: null } };
           }
         }
 
-        // Левелап
         let newXp = prev.hero.xp + xpGained;
         let newLevel = prev.hero.level;
         let newXpToNext = prev.hero.xpToNext;
         let newBaseStats = { ...prev.hero.baseStats };
         while (newXp >= newXpToNext) {
-          newXp -= newXpToNext;
-          newLevel++;
-          newXpToNext = Math.floor(newXpToNext * 1.5);
-          newBaseStats = {
-            ...newBaseStats,
-            str: newBaseStats.str + 1, agi: newBaseStats.agi + 1, int: newBaseStats.int + 1,
-            maxHp: newBaseStats.maxHp + 5, maxMp: newBaseStats.maxMp + 3,
-            firePower: newBaseStats.firePower + (Math.random() < 0.3 ? 1 : 0),
-            waterPower: newBaseStats.waterPower + (Math.random() < 0.3 ? 1 : 0),
-            earthPower: newBaseStats.earthPower + (Math.random() < 0.3 ? 1 : 0),
-            airPower: newBaseStats.airPower + (Math.random() < 0.3 ? 1 : 0),
-            lightPower: newBaseStats.lightPower + (Math.random() < 0.3 ? 1 : 0),
-            darkPower: newBaseStats.darkPower + (Math.random() < 0.3 ? 1 : 0),
-          };
+          newXp -= newXpToNext; newLevel++; newXpToNext = Math.floor(newXpToNext * 1.5);
+          newBaseStats = { ...newBaseStats, str: newBaseStats.str + 1, agi: newBaseStats.agi + 1, int: newBaseStats.int + 1, maxHp: newBaseStats.maxHp + 5, maxMp: newBaseStats.maxMp + 3,
+            firePower: newBaseStats.firePower + (Math.random() < 0.3 ? 1 : 0), waterPower: newBaseStats.waterPower + (Math.random() < 0.3 ? 1 : 0),
+            earthPower: newBaseStats.earthPower + (Math.random() < 0.3 ? 1 : 0), airPower: newBaseStats.airPower + (Math.random() < 0.3 ? 1 : 0),
+            lightPower: newBaseStats.lightPower + (Math.random() < 0.3 ? 1 : 0), darkPower: newBaseStats.darkPower + (Math.random() < 0.3 ? 1 : 0) };
           addLog(`⬆️ Уровень ${newLevel}!`, 'system');
         }
-        const newOsmMax = 4 + (newLevel - 1) * 2;
-
-        return {
-          ...prev,
-          hero: {
-            ...prev.hero, level: newLevel, xp: newXp, xpToNext: newXpToNext,
-            gold: prev.hero.gold + goldGained, baseStats: newBaseStats,
-            osmMax: newOsmMax, inventory: newInventory,
-            bestiary: { ...prev.hero.bestiary, [enemy.template.id]: { ...prev.hero.bestiary[enemy.template.id], kills: (prev.hero.bestiary[enemy.template.id]?.kills || 0) + 1 } },
-          },
-          battle: { active: false, enemy: null, log: [], turn: 0, playerTurn: true, selectedBodyPart: null },
-        };
+        return { ...prev, hero: { ...prev.hero, level: newLevel, xp: newXp, xpToNext: newXpToNext, gold: prev.hero.gold + goldGained, baseStats: newBaseStats, osmMax: 4 + (newLevel - 1) * 2, inventory: newInventory,
+          bestiary: { ...prev.hero.bestiary, [enemy.template.id]: { ...prev.hero.bestiary[enemy.template.id], kills: (prev.hero.bestiary[enemy.template.id]?.kills || 0) + 1 } } },
+          battle: { active: false, enemy: null, log: [], turn: 0, playerTurn: true, selectedBodyPart: null } };
       });
       addLog(`Победа над ${enemy.template.name}!`, 'loot');
     }
@@ -412,7 +439,7 @@ export function useGameState() {
     const location = LOCATIONS[state.currentLocation];
     if (!location) return;
     if (location.tags.type === 'city') {
-      addLog(`Ты осматриваешь ${location.name}. Всё спокойно.`, 'story');
+      addLog(`Осматриваешь ${location.name}.`, 'story');
       if (location.resources.length > 0 && Math.random() < 0.3) {
         const resId = pickRandom(location.resources);
         const item = ITEMS[resId];
@@ -429,24 +456,9 @@ export function useGameState() {
       }
       return;
     }
-    if (location.enemies.length > 0 && Math.random() < 0.7) {
-      startBattle();
-    } else {
+    if (location.enemies.length > 0 && Math.random() < 0.7) { startBattle(); }
+    else {
       addLog(`Исследуя ${location.name}, пока никого...`, 'story');
-      if (location.resources.length > 0 && Math.random() < 0.5) {
-        const resId = pickRandom(location.resources);
-        const item = ITEMS[resId];
-        if (item) {
-          setState(prev => {
-            const newInv = [...prev.hero.inventory];
-            const idx = newInv.findIndex(i => i.item.id === item.id);
-            if (idx >= 0 && item.stackable) newInv[idx] = { ...newInv[idx], count: Math.min(newInv[idx].count + 1, item.maxStack || 99) };
-            else newInv.push({ item, count: 1 });
-            return { ...prev, hero: { ...prev.hero, inventory: newInv } };
-          });
-          addLog(`Найдено: ${item.name}`, 'loot');
-        }
-      }
     }
   }, [state.currentLocation, addLog, startBattle]);
 
@@ -456,67 +468,107 @@ export function useGameState() {
     if (state.hero.gold < 5) { addLog('Недостаточно золота (нужно 5).', 'system'); return; }
     const stats = getEffectiveStats(state.hero);
     setState(prev => ({ ...prev, hero: { ...prev.hero, currentHp: stats.maxHp, currentMp: stats.maxMp, gold: prev.hero.gold - 5 } }));
-    addLog('Отдых в таверне. HP/MP восстановлены. (-5 золота)', 'system');
+    addLog('Отдых. HP/MP восстановлены. (-5 золота)', 'system');
   }, [state.hero, state.currentLocation, addLog]);
 
-  // ─── КОНСТРУКТОР ЗАКЛИНАНИЙ ───
-  const addRuneToSlot = useCallback((slotIndex: number, runeId: string) => {
+  // ─── КОНСТРУКТОР: запуск сборки ───
+  const startBuild = useCallback((slotIndex: number) => {
+    const slot = state.hero.spellSlots[slotIndex];
+    setBuildingSlot(slotIndex);
+    setBuildState({
+      target: slot.target,
+      runes: [...slot.runes],
+      element: slot.element || 'fire',
+      trajectory: slot.trajectory || 'direct',
+      form: slot.form || '',
+      scrollEffect: slot.scrollEffect || '',
+    });
+    setInteractionMode('spellBuilder');
+  }, [state.hero.spellSlots]);
+
+  // ─── КОНСТРУКТОР: сохранить ───
+  const saveBuild = useCallback(() => {
+    if (buildingSlot === null) return;
+    setState(prev => {
+      const newSlots = [...prev.hero.spellSlots];
+      let mpCost = 0;
+      if (buildState.target === 'self') {
+        const totalOsm = buildState.runes.reduce((sum, rId) => sum + (RUNES[rId]?.osmCost || 0), 0);
+        mpCost = totalOsm * 2 + 2;
+      } else {
+        mpCost = 3;
+        if (buildState.trajectory && TRAJECTORIES[buildState.trajectory]) mpCost += TRAJECTORIES[buildState.trajectory].mpCost;
+        if (buildState.form && SPELL_FORMS[buildState.form]) mpCost += SPELL_FORMS[buildState.form].mpCost - 3;
+      }
+      newSlots[buildingSlot] = {
+        name: `Слот ${buildingSlot + 1}`,
+        target: buildState.target,
+        runes: buildState.target === 'self' ? buildState.runes : [],
+        element: buildState.target === 'enemy' ? buildState.element : undefined,
+        trajectory: buildState.target === 'enemy' ? buildState.trajectory : undefined,
+        form: buildState.target === 'enemy' ? buildState.form : undefined,
+        scrollEffect: buildState.target === 'enemy' ? buildState.scrollEffect : undefined,
+        mpCost,
+      };
+      return { ...prev, hero: { ...prev.hero, spellSlots: newSlots } };
+    });
+    addLog('Заклинание сохранено!', 'system');
+    setBuildingSlot(null);
+    setInteractionMode('none');
+  }, [buildingSlot, buildState, addLog]);
+
+  // ─── КОНСТРУКТОР: добавить руну ───
+  const addRuneToBuild = useCallback((runeId: string) => {
     const rune = RUNES[runeId];
     if (!rune) return;
-    setState(prev => {
-      const slot = prev.hero.spellSlots[slotIndex];
-      if (!slot) return prev;
-      const currentOsm = slot.runes.reduce((sum, rId) => sum + (RUNES[rId]?.osmCost || 0), 0);
-      if (currentOsm + rune.osmCost > prev.hero.osmMax) return prev;
-      const timeRunes = slot.runes.filter(rId => RUNES[rId]?.type === 'time').length;
-      if (rune.type === 'time' && timeRunes >= 2) return prev;
-      const nonTimeRunes = slot.runes.filter(rId => RUNES[rId]?.type !== 'time').length;
-      if (rune.type !== 'time' && nonTimeRunes >= 1) return prev;
-      const newSlots = [...prev.hero.spellSlots];
-      newSlots[slotIndex] = { ...slot, runes: [...slot.runes, runeId] };
-      // Пересчёт маны
-      const totalOsm = newSlots[slotIndex].runes.reduce((sum, rId) => sum + (RUNES[rId]?.osmCost || 0), 0);
-      newSlots[slotIndex] = { ...newSlots[slotIndex], mpCost: totalOsm * 2 + 2 };
-      return { ...prev, hero: { ...prev.hero, spellSlots: newSlots } };
-    });
+    const currentOsm = buildState.runes.reduce((sum, rId) => sum + (RUNES[rId]?.osmCost || 0), 0);
+    if (currentOsm + rune.osmCost > state.hero.osmMax) { addLog('Недостаточно ОЧСМ!', 'system'); return; }
+    const timeRunes = buildState.runes.filter(rId => RUNES[rId]?.type === 'time').length;
+    if (rune.type === 'time' && timeRunes >= 2) { addLog('Макс 2 руны времени!', 'system'); return; }
+    const nonTimeRunes = buildState.runes.filter(rId => RUNES[rId]?.type !== 'time').length;
+    if (rune.type !== 'time' && nonTimeRunes >= 1) { addLog('Макс 1 руна эффекта/уникальная!', 'system'); return; }
+    setBuildState(prev => ({ ...prev, runes: [...prev.runes, runeId] }));
+  }, [buildState.runes, state.hero.osmMax, addLog]);
+
+  const removeRuneFromBuild = useCallback((idx: number) => {
+    setBuildState(prev => ({ ...prev, runes: prev.runes.filter((_, i) => i !== idx) }));
   }, []);
 
-  const removeRuneFromSlot = useCallback((slotIndex: number, runeIndex: number) => {
-    setState(prev => {
-      const newSlots = [...prev.hero.spellSlots];
-      const slot = newSlots[slotIndex];
-      if (!slot) return prev;
-      const newRunes = [...slot.runes];
-      newRunes.splice(runeIndex, 1);
-      const totalOsm = newRunes.reduce((sum, rId) => sum + (RUNES[rId]?.osmCost || 0), 0);
-      newSlots[slotIndex] = { ...slot, runes: newRunes, mpCost: totalOsm * 2 + 2 };
-      return { ...prev, hero: { ...prev.hero, spellSlots: newSlots } };
-    });
-  }, []);
-
-  const setSpellTarget = useCallback((slotIndex: number, target: 'self' | 'enemy') => {
-    setState(prev => {
-      const newSlots = [...prev.hero.spellSlots];
-      newSlots[slotIndex] = { ...newSlots[slotIndex], target };
-      return { ...prev, hero: { ...prev.hero, spellSlots: newSlots } };
-    });
+  const cancelBuild = useCallback(() => {
+    setBuildingSlot(null);
+    setInteractionMode('none');
   }, []);
 
   const selectBodyPart = useCallback((part: BodyPart) => {
     setState(prev => ({ ...prev, battle: { ...prev.battle, selectedBodyPart: part } }));
   }, []);
 
+  const openBestiaryEntry = useCallback((enemyId: string) => {
+    setSelectedItem(`bestiary-${enemyId}`);
+    setInteractionMode('bestiary');
+  }, []);
+
+  const openItemInteraction = useCallback((idx: number) => {
+    setSelectedItem(String(idx));
+    setInteractionMode('item');
+  }, []);
+
   const resetGame = useCallback(() => {
     setState(createInitialState());
     setSelectedItem(null);
+    setInteractionMode('none');
+    setBuildingSlot(null);
   }, []);
 
   return {
-    state, selectedItem, setSelectedItem, spellBuilder, setSpellBuilder,
+    state, selectedItem, setSelectedItem,
+    interactionMode, setInteractionMode,
+    buildingSlot, buildState, setBuildState,
     getEffectiveStats: () => getEffectiveStats(state.hero),
     equipItem, unequipItem, useItem,
     travel, startBattle, playerAttack, castSpell, flee,
     explore, rest, endBattle, addLog, resetGame,
-    addRuneToSlot, removeRuneFromSlot, setSpellTarget, selectBodyPart,
+    startBuild, saveBuild, addRuneToBuild, removeRuneFromBuild, cancelBuild,
+    selectBodyPart, openBestiaryEntry, openItemInteraction,
   };
 }

@@ -30,6 +30,9 @@ export type BodyPart = 'head' | 'torso' | 'arms' | 'legs' | 'wings' | 'tail';
 // ─── Формы заклинаний ───
 export type SpellForm = 'bolt' | 'arrow' | 'sphere' | 'wave' | 'beam' | 'nova';
 
+// ─── Траектории ───
+export type Trajectory = 'direct' | 'arc' | 'homing' | 'spread' | 'pierce';
+
 // ─── Типы рун ───
 export type RuneType = 'time' | 'effect' | 'unique';
 
@@ -68,9 +71,23 @@ export interface Rune {
 
 export interface SpellSlot {
   name: string;
-  runes: string[]; // id рун, макс 3: 2 времени + 1 эффект/уникальная
-  mpCost: number;
   target: 'self' | 'enemy';
+  // Для "на себя" — руны
+  runes: string[];
+  // Для "на врага" — конструктор
+  element?: ElementType;
+  trajectory?: Trajectory;
+  form?: string; // id формы из свитка
+  scrollEffect?: string; // id доп.эффекта из свитка
+  mpCost: number;
+}
+
+// Изученные части тела врага
+export interface StudiedBodyPart {
+  part: BodyPart;
+  weakness?: ElementType;
+  resistance?: ElementType;
+  discovered: boolean;
 }
 
 // Заклинание на себя: руны времени + эффект/уникальная
@@ -231,6 +248,7 @@ export interface BestiaryEntry {
   enemyId: string;
   kills: number;
   discovered: boolean;
+  studiedParts: Record<BodyPart, StudiedBodyPart>;
 }
 
 export interface BattleState {
