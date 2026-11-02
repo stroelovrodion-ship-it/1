@@ -6,7 +6,7 @@ export const LOCATIONS: Record<string, Location> = {
     description: 'Стартовый город. Таверна "Последний огонёк".',
     tags: { type: 'city', dangerLevel: 0 },
     enemies: [], resources: [], runeDrops: [],
-    connectedTo: ['ruins', 'cursed_forest'], events: ['tavern_rest', 'shop'],
+    connectedTo: ['ruins', 'cursed_forest', 'nomad_camp', 'hunter_camp'], events: ['tavern_rest', 'shop'],
     mapX: 20, mapY: 50,
   },
   crystal_spire: {
@@ -14,7 +14,7 @@ export const LOCATIONS: Record<string, Location> = {
     description: 'Академия магии. Обучение и библиотека.',
     tags: { type: 'city', dangerLevel: 0 },
     enemies: [], resources: ['crystal_shard'], runeDrops: ['time_persistent'],
-    connectedTo: ['crystal_wastes'], events: ['training', 'library'],
+    connectedTo: ['crystal_wastes', 'trader_camp', 'ancient_library'], events: ['training', 'library'],
     mapX: 80, mapY: 20,
   },
   rusty_port: {
@@ -22,7 +22,7 @@ export const LOCATIONS: Record<string, Location> = {
     description: 'Порт контрабандистов. Чёрный рынок.',
     tags: { type: 'city', dangerLevel: 1 },
     enemies: [], resources: ['metal_ore', 'leather_piece'], runeDrops: ['unique_drain'],
-    connectedTo: ['underground'], events: ['black_market'],
+    connectedTo: ['underground', 'trader_camp', 'southern_continent'], events: ['black_market'],
     mapX: 70, mapY: 75,
   },
   ruins: {
@@ -31,7 +31,7 @@ export const LOCATIONS: Record<string, Location> = {
     tags: { type: 'dungeon', dangerLevel: 3 },
     enemies: ['skeleton', 'ruin_golem'], resources: ['metal_ore', 'bone_fragment'],
     runeDrops: ['effect_earth', 'time_delayed'],
-    connectedTo: ['ashen_harbor', 'underground'], events: ['treasure_find'],
+    connectedTo: ['ashen_harbor', 'underground', 'hunter_camp', 'forgotten_ruins'], events: ['treasure_find'],
     mapX: 15, mapY: 25,
   },
   crystal_wastes: {
@@ -40,7 +40,7 @@ export const LOCATIONS: Record<string, Location> = {
     tags: { type: 'wild', dangerLevel: 5 },
     enemies: ['crystal_spider', 'lightning_elemental'], resources: ['crystal_shard', 'dark_essence'],
     runeDrops: ['effect_water', 'effect_air', 'time_recurring'],
-    connectedTo: ['crystal_spire'], events: ['crystal_harvest'],
+    connectedTo: ['crystal_spire', 'nomad_camp', 'northern_continent'], events: ['crystal_harvest'],
     mapX: 85, mapY: 40,
   },
   cursed_forest: {
@@ -49,7 +49,7 @@ export const LOCATIONS: Record<string, Location> = {
     tags: { type: 'wild', dangerLevel: 4 },
     enemies: ['shadow_wolf', 'forest_wraith'], resources: ['herb', 'leather_piece', 'dark_essence'],
     runeDrops: ['effect_dark', 'effect_light', 'unique_shield'],
-    connectedTo: ['ashen_harbor'], events: ['herb_gathering'],
+    connectedTo: ['ashen_harbor', 'hunter_camp'], events: ['herb_gathering'],
     mapX: 25, mapY: 80,
   },
   underground: {
@@ -83,7 +83,7 @@ export const LOCATIONS: Record<string, Location> = {
     description: 'Охотники на монстров. Обучение и снаряжение.',
     tags: { type: 'camp', dangerLevel: 2 },
     enemies: [], resources: ['bone_fragment', 'leather_piece'], runeDrops: [],
-    connectedTo: ['cursed_forest', 'ruins'], events: ['training', 'bounties'],
+    connectedTo: ['ashen_harbor', 'cursed_forest', 'ruins'], events: ['training', 'bounties'],
     mapX: 30, mapY: 60,
   },
   // Материки
@@ -93,7 +93,7 @@ export const LOCATIONS: Record<string, Location> = {
     tags: { type: 'continent', dangerLevel: 8 },
     enemies: ['frost_wraith', 'ice_golem'], resources: ['crystal_shard', 'dark_essence'],
     runeDrops: ['effect_ice', 'unique_frost'],
-    connectedTo: ['crystal_wastes'], events: ['ancient_ruins', 'frost_storm'],
+    connectedTo: ['crystal_wastes', 'forgotten_ruins', 'dragon_peak'], events: ['ancient_ruins', 'frost_storm'],
     mapX: 50, mapY: 10,
   },
   southern_continent: {
@@ -111,7 +111,7 @@ export const LOCATIONS: Record<string, Location> = {
     tags: { type: 'continent', dangerLevel: 9 },
     enemies: ['jungle_beast', 'poisonous_plant'], resources: ['rare_herb', 'exotic_wood'],
     runeDrops: ['effect_poison', 'unique_nature'],
-    connectedTo: ['crystal_spire'], events: ['jungle_exploration', 'ancient_civilization'],
+    connectedTo: ['crystal_spire', 'dragon_peak'], events: ['jungle_exploration', 'ancient_civilization'],
     mapX: 95, mapY: 50,
   },
   // Дополнительные локации
@@ -121,7 +121,7 @@ export const LOCATIONS: Record<string, Location> = {
     tags: { type: 'dungeon', dangerLevel: 7 },
     enemies: ['ancient_guardian', 'stone_golem'], resources: ['ancient_relic', 'crystal_shard'],
     runeDrops: ['unique_ancient', 'effect_time'],
-    connectedTo: ['northern_continent', 'ruins'], events: ['artifact_discovery', 'trap'],
+    connectedTo: ['ruins', 'northern_continent', 'ancient_library'], events: ['artifact_discovery', 'trap'],
     mapX: 25, mapY: 15,
   },
   ancient_library: {
