@@ -28,10 +28,40 @@ export type EffectType = 'heal' | 'damage' | 'buff' | 'debuff' | 'shield' | 'bur
 export type BodyPart = 'head' | 'torso' | 'arms' | 'legs' | 'wings' | 'tail';
 
 // ─── Формы заклинаний ───
-export type SpellForm = 'bolt' | 'arrow' | 'sphere' | 'wave' | 'beam' | 'nova';
+export type SpellFormId = 'bolt' | 'arrow' | 'sphere' | 'wave' | 'beam' | 'nova';
+
+export interface SpellForm {
+  id: string;
+  name: string;
+  description: string;
+  damageBonus: number;
+  critBonus: number;
+  mpCost: number;
+  level: number;
+}
+
+// ─── Эффекты свитков ───
+export interface ScrollEffect {
+  id: string;
+  name: string;
+  description: string;
+  element: string;
+  effect: string;
+  chance: number;
+  power: number;
+  level: number;
+}
 
 // ─── Траектории ───
 export type Trajectory = 'direct' | 'arc' | 'homing' | 'spread' | 'pierce';
+
+// ─── Подсказки (tooltips) ───
+export interface TooltipData {
+  id: string;
+  title: string;
+  description: string;
+  stats?: Record<string, string | number>;
+}
 
 // ─── Типы рун ───
 export type RuneType = 'time' | 'effect' | 'unique';

@@ -7,6 +7,32 @@ import { ITEMS } from './data/items';
 import { ENEMIES } from './data/enemies';
 import { SlotType, RarityType, BodyPart, ElementType, LocationId } from './types/tags';
 
+// ═══ Компонент подсказки ═══
+function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  const [show, setShow] = useState(false);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const ref = useRef<HTMLSpanElement>(null);
+
+  const handleMouseEnter = () => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setPos({ x: rect.left, y: rect.bottom + 8 });
+    }
+    setShow(true);
+  };
+
+  return (
+    <span ref={ref} className="tt-anchor" onMouseEnter={handleMouseEnter} onMouseLeave={() => setShow(false)}>
+      {children}
+      {show && (
+        <div className="tooltip" style={{ left: pos.x, top: pos.y }}>
+          {text}
+        </div>
+      )}
+    </span>
+  );
+}
+
 function App() {
   const game = useGameState();
   const { state } = game;
@@ -38,33 +64,39 @@ function App() {
     head: 'Голова', torso: 'Торс', arms: 'Руки', legs: 'Ноги', wings: 'Крылья', tail: 'Хвост',
   };
 
-  // ═══ РЕНДЕР ВЗАИМОДЕЙСТВИЯ (универсальная вкладка) ═══
+  // ═══ РЕНДЕР ВЗАИМОДЕЙСТВИЯ ═══
   const renderInteraction = () => {
-    // Режим конструктора заклинаний
     if (game.interactionMode === 'spellBuilder' && game.buildingSlot !== null) {
       const bs = game.buildState;
       return (
         <div className="interaction" style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', overflow: 'auto' }}>
           <div className="inv-title">// КОНСТРУКТОР ЗАКЛИНАНИЯ — Слот {game.buildingSlot + 1}</div>
 
-          {/* Переключатель На себя / На врага */}
           <div style={{ display: 'flex', gap: '4px' }}>
-            <button className="btn" style={{ flex: 1, fontSize: '8px', opacity: bs.target === 'self' ? 1 : 0.4 }}
-              onClick={() => game.setBuildState({ ...bs, target: 'self' })}>✨ На себя</button>
-            <button className="btn" style={{ flex: 1, fontSize: '8px', opacity: bs.target === 'enemy' ? 1 : 0.4 }}
-              onClick={() => game.setBuildState({ ...bs, target: 'enemy' })}>⚔️ На врага</button>
+            <Tooltip text="Руны времени + эффекты. Лечат, дают баффы.">
+              <button className="btn" style={{ flex: 1, fontSize: '8px', opacity: bs.target === 'self' ? 1 : 0.4 }}
+                onClick={() => game.setBuildState({ ...bs, target: 'self' })}>✨ На себя</button>
+            </Tooltip>
+            <Tooltip text="Элемент + траектория + форма. Атакуют врага.">
+              <button className="btn" style={{ flex: 1, fontSize: '8px', opacity: bs.target === 'enemy' ? 1 : 0.4 }}
+                onClick={() => game.setBuildState({ ...bs, target: 'enemy' })}>⚔️ На врага</button>
+            </Tooltip>
           </div>
 
           {bs.target === 'self' ? (
-            // ═══ НА СЕБЯ: РУНЫ ═══
             <>
-              <div style={{ fontSize: '8px', color: '#6cf' }}>Руны (ОЧСМ: {bs.runes.reduce((s, id) => s + (RUNES[id]?.osmCost || 0), 0)}/{hero.osmMax}):</div>
+              <div style={{ fontSize: '8px', color: '#6cf' }}>
+                Руны (ОЧСМ: {bs.runes.reduce((s, id) => s + (RUNES[id]?.osmCost || 0), 0)}/{hero.osmMax})
+                <Tooltip text="ОЧСМ — очки силы магии. Растут на +2 за уровень."> ~</Tooltip>
+              </div>
               {bs.runes.length === 0 ? <div className="placeholder">Добавь руны ↓</div> :
                 bs.runes.map((rId, idx) => {
                   const r = RUNES[rId]; if (!r) return null;
                   return (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px', border: '1px solid #333', fontSize: '8px' }}>
-                      <span style={{ color: r.type === 'time' ? '#6cf' : r.type === 'effect' ? '#f66' : '#c6f' }}>{r.name} [{r.osmCost}]</span>
+                      <Tooltip text={r.description}>
+                        <span style={{ color: r.type === 'time' ? '#6cf' : r.type === 'effect' ? '#f66' : '#c6f' }}>{r.name} [{r.osmCost}]</span>
+                      </Tooltip>
                       <button className="btn danger" style={{ fontSize: '7px', padding: '1px 4px' }} onClick={() => game.removeRuneFromBuild(idx)}>✕</button>
                     </div>
                   );
@@ -75,61 +107,76 @@ function App() {
                 {hero.collectedRunes.map(rId => {
                   const r = RUNES[rId]; if (!r) return null;
                   return (
-                    <button key={rId} className="btn" style={{ fontSize: '7px', textAlign: 'left', padding: '3px 6px' }}
-                      onClick={() => game.addRuneToBuild(rId)}>
-                      <span style={{ color: r.type === 'time' ? '#6cf' : r.type === 'effect' ? '#f66' : '#c6f' }}>
-                        [{r.type === 'time' ? 'В' : r.type === 'effect' ? 'Э' : 'У'}]
-                      </span> {r.name}
-                    </button>
+                    <Tooltip key={rId} text={r.description}>
+                      <button className="btn" style={{ fontSize: '7px', textAlign: 'left', padding: '3px 6px', width: '100%' }}
+                        onClick={() => game.addRuneToBuild(rId)}>
+                        <span style={{ color: r.type === 'time' ? '#6cf' : r.type === 'effect' ? '#f66' : '#c6f' }}>
+                          [{r.type === 'time' ? 'В' : r.type === 'effect' ? 'Э' : 'У'}]
+                        </span> {r.name}
+                      </button>
+                    </Tooltip>
                   );
                 })}
               </div>
             </>
           ) : (
-            // ═══ НА ВРАГА: ЭЛЕМЕНТ + ТРАЕКТОРИЯ + ФОРМА + ЭФФЕКТ ═══
             <>
-              {/* Элемент */}
-              <div style={{ fontSize: '8px', color: '#6cf' }}>Элемент:</div>
+              <div style={{ fontSize: '8px', color: '#6cf' }}>
+                Элемент
+                <Tooltip text="Сила стихии влияет на урон. Слабости врага = x1.5 урон."> ~</Tooltip>
+              </div>
               <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
                 {(['fire', 'water', 'earth', 'air', 'light', 'dark'] as ElementType[]).map(el => (
-                  <button key={el} className={`btn ${bs.element === el ? 'success' : ''}`}
-                    style={{ fontSize: '7px', padding: '3px 6px' }}
-                    onClick={() => game.setBuildState({ ...bs, element: el })}>
-                    {el === 'fire' ? '🔥' : el === 'water' ? '💧' : el === 'earth' ? '🪨' : el === 'air' ? '💨' : el === 'light' ? '✨' : '🌑'} {el}
-                  </button>
+                  <Tooltip key={el} text={`Сила ${el}: ${effectiveStats[`${el}Power` as keyof typeof effectiveStats]}`}>
+                    <button className={`btn ${bs.element === el ? 'success' : ''}`}
+                      style={{ fontSize: '7px', padding: '3px 6px' }}
+                      onClick={() => game.setBuildState({ ...bs, element: el })}>
+                      {el === 'fire' ? '🔥' : el === 'water' ? '💧' : el === 'earth' ? '🪨' : el === 'air' ? '💨' : el === 'light' ? '✨' : '🌑'} {el}
+                    </button>
+                  </Tooltip>
                 ))}
               </div>
 
-              {/* Траектория */}
-              <div style={{ fontSize: '8px', color: '#6cf', marginTop: '4px' }}>Траектория:</div>
+              <div style={{ fontSize: '8px', color: '#6cf', marginTop: '4px' }}>
+                Траектория
+                <Tooltip text="Влияет на точность и урон. Все доступны сразу."> ~</Tooltip>
+              </div>
               <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
                 {Object.values(TRAJECTORIES).map(t => (
-                  <button key={t.id} className={`btn ${bs.trajectory === t.id ? 'success' : ''}`}
-                    style={{ fontSize: '7px', padding: '3px 6px' }}
-                    onClick={() => game.setBuildState({ ...bs, trajectory: t.id })}>
-                    {t.name}
-                  </button>
+                  <Tooltip key={t.id} text={`${t.description}\nУрон: x${t.damageMultiplier} | MP: +${t.mpCost}`}>
+                    <button className={`btn ${bs.trajectory === t.id ? 'success' : ''}`}
+                      style={{ fontSize: '7px', padding: '3px 6px' }}
+                      onClick={() => game.setBuildState({ ...bs, trajectory: t.id })}>
+                      {t.name}
+                    </button>
+                  </Tooltip>
                 ))}
               </div>
 
-              {/* Форма (из свитков) */}
-              <div style={{ fontSize: '8px', color: '#6cf', marginTop: '4px' }}>Форма (свитки):</div>
+              <div style={{ fontSize: '8px', color: '#6cf', marginTop: '4px' }}>
+                Форма
+                <Tooltip text="Изучаются из свитков. Влияют на урон и крит."> ~</Tooltip>
+              </div>
               <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
                 {hero.knownScrolls.filter(s => SPELL_FORMS[s]).map(fId => {
                   const f = SPELL_FORMS[fId]; if (!f) return null;
                   return (
-                    <button key={fId} className={`btn ${bs.form === fId ? 'success' : ''}`}
-                      style={{ fontSize: '7px', padding: '3px 6px' }}
-                      onClick={() => game.setBuildState({ ...bs, form: fId })}>
-                      {f.name}
-                    </button>
+                    <Tooltip key={fId} text={`${f.description}\nУрон: +${f.damageBonus} | Крит: +${f.critBonus}% | MP: ${f.mpCost}`}>
+                      <button className={`btn ${bs.form === fId ? 'success' : ''}`}
+                        style={{ fontSize: '7px', padding: '3px 6px' }}
+                        onClick={() => game.setBuildState({ ...bs, form: fId })}>
+                        {f.name}
+                      </button>
+                    </Tooltip>
                   );
                 })}
                 {hero.knownScrolls.filter(s => SPELL_FORMS[s]).length === 0 && <div className="placeholder">Нет свитков форм</div>}
               </div>
 
-              {/* Доп. эффект (из свитков) */}
-              <div style={{ fontSize: '8px', color: '#6cf', marginTop: '4px' }}>Доп. эффект (свитки):</div>
+              <div style={{ fontSize: '8px', color: '#6cf', marginTop: '4px' }}>
+                Доп. эффект
+                <Tooltip text="Изучаются из свитков. Шанс срабатывания."> ~</Tooltip>
+              </div>
               <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
                 <button className={`btn ${bs.scrollEffect === '' ? 'success' : ''}`}
                   style={{ fontSize: '7px', padding: '3px 6px' }}
@@ -137,18 +184,19 @@ function App() {
                 {hero.knownScrolls.filter(s => SCROLL_EFFECTS[s]).map(sId => {
                   const s = SCROLL_EFFECTS[sId]; if (!s) return null;
                   return (
-                    <button key={sId} className={`btn ${bs.scrollEffect === sId ? 'success' : ''}`}
-                      style={{ fontSize: '7px', padding: '3px 6px' }}
-                      onClick={() => game.setBuildState({ ...bs, scrollEffect: sId })}>
-                      {s.name}
-                    </button>
+                    <Tooltip key={sId} text={`${s.description}\nШанс: ${s.chance}%`}>
+                      <button className={`btn ${bs.scrollEffect === sId ? 'success' : ''}`}
+                        style={{ fontSize: '7px', padding: '3px 6px' }}
+                        onClick={() => game.setBuildState({ ...bs, scrollEffect: sId })}>
+                        {s.name}
+                      </button>
+                    </Tooltip>
                   );
                 })}
               </div>
             </>
           )}
 
-          {/* Кнопки сохранить / отмена */}
           <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
             <button className="btn success" onClick={game.saveBuild}>💾 Сохранить</button>
             <button className="btn danger" onClick={game.cancelBuild}>✕ Отмена</button>
@@ -157,7 +205,6 @@ function App() {
       );
     }
 
-    // Режим бистеария
     if (game.interactionMode === 'bestiary' && game.selectedItem?.startsWith('bestiary-')) {
       const enemyId = game.selectedItem.replace('bestiary-', '');
       const entry = hero.bestiary[enemyId];
@@ -195,7 +242,6 @@ function App() {
       );
     }
 
-    // Режим предмета
     if (game.interactionMode === 'item' && game.selectedItem && !game.selectedItem.startsWith('eq-') && !game.selectedItem.startsWith('bestiary-')) {
       const invItem = hero.inventory[parseInt(game.selectedItem)];
       if (!invItem) return <div className="placeholder">Не найдено.</div>;
@@ -240,7 +286,6 @@ function App() {
           </div>
 
           <div className="tab-content">
-            {/* ЛОГ СОБЫТИЙ */}
             <div className={`pane ${leftTab === 'log-events' ? 'active' : ''}`}>
               <div className="event-log" ref={eventLogRef}>
                 {eventLog.map((entry, i) => (
@@ -252,7 +297,6 @@ function App() {
               </div>
             </div>
 
-            {/* ЛОГ БОЯ */}
             <div className={`pane ${leftTab === 'log-battle' ? 'active' : ''}`}>
               <div className="battle-log">
                 <div className="battle-history">
@@ -304,7 +348,6 @@ function App() {
               </div>
             </div>
 
-            {/* ПУТЕШЕСТВИЕ */}
             <div className={`pane ${leftTab === 'travel' ? 'active' : ''}`}>
               <div className="location-panel">
                 <div className="location-name">{location?.name} {location?.tags.type === 'city' ? '🏰' : '⚔️'}</div>
@@ -331,7 +374,6 @@ function App() {
                         onMouseLeave={(e) => { e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1)'; }} />
                     ))}
 
-                    {/* Инфо о выбранной локации */}
                     {selectedMapLocation && (() => {
                       const selectedLoc = LOCATIONS[selectedMapLocation];
                       if (!selectedLoc) return null;
@@ -367,7 +409,6 @@ function App() {
               </div>
             </div>
 
-            {/* ЛОКАЦИИ */}
             <div className={`pane ${leftTab === 'locations' ? 'active' : ''}`}>
               <div className="location-panel">
                 <div className="location-name">{location?.name}</div>
@@ -382,7 +423,6 @@ function App() {
               </div>
             </div>
 
-            {/* ВЗАИМОДЕЙСТВИЕ — универсальная вкладка */}
             <div className={`pane ${leftTab === 'interaction' ? 'active' : ''}`}>
               {renderInteraction()}
             </div>
@@ -404,7 +444,6 @@ function App() {
               </div>
             </div>
             <div className="tab-content">
-              {/* ИНВЕНТАРЬ */}
               <div className={`pane ${rightTopTab === 'inv' ? 'active' : ''}`}>
                 <div className="inv">
                   <div className="inv-equipped">
@@ -436,7 +475,6 @@ function App() {
                 </div>
               </div>
 
-              {/* КОНСТРУКТОР — список слотов с кнопкой создать */}
               <div className={`pane ${rightTopTab === 'mana' ? 'active' : ''}`}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
                   <div style={{ color: '#6cf', fontSize: '9px', letterSpacing: '1px', borderBottom: '1px dashed #333', paddingBottom: '4px' }}>
@@ -467,7 +505,6 @@ function App() {
                 </div>
               </div>
 
-              {/* СТАТЫ */}
               <div className={`pane ${rightTopTab === 'stats-hero' ? 'active' : ''}`}>
                 <div className="hero-stats">
                   <div className="hero-stats-title">// СТАТЫ</div>
@@ -495,7 +532,6 @@ function App() {
                 </div>
               </div>
 
-              {/* БИСТЕАРИЙ — только имена, клик → взаимодействие */}
               <div className={`pane ${rightTopTab === 'bestiary' ? 'active' : ''}`}>
                 <div className="bestiary-list">
                   {Object.keys(hero.bestiary).length === 0 ? <div className="placeholder">Ещё никто не встречен...</div> :
@@ -516,7 +552,6 @@ function App() {
           </div>
         </div>
 
-        {/* ВРАГ */}
         <div className="right-bottom">
           <div className="block">
             <div className="tabs-wrap">
