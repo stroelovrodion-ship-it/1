@@ -549,39 +549,145 @@ function App() {
                   🗺️ {showMap ? 'Скрыть карту' : 'Показать карту'}
                 </button>
                 {showMap && (
-                  <div className="fade-in" style={{ border: '1px solid #333', padding: '8px', marginBottom: '8px', position: 'relative', height: '200px', background: '#050510' }}>
+                  <div className="fade-in" style={{ border: '1px solid #333', padding: '8px', marginBottom: '8px', position: 'relative', height: '280px', background: '#050510' }}>
+                    {/* Легенда карты */}
+                    <div style={{ position: 'absolute', top: '4px', right: '4px', fontSize: '7px', color: '#888', background: '#0a0a1a', padding: '4px', border: '1px solid #333', zIndex: 10 }}>
+                      <div style={{ color: '#6cf', marginBottom: '2px' }}>Легенда:</div>
+                      <div>🏰 Город</div>
+                      <div>⛺ Лагерь</div>
+                      <div>⚔️ Опасная зона</div>
+                      <div>🏛️ Подземелье</div>
+                      <div>🌍 Материк</div>
+                      <div>✨ Особая</div>
+                    </div>
+                    
                     <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
                       {Object.values(LOCATIONS).map(loc => loc.connectedTo.map(cId => {
                         const cLoc = LOCATIONS[cId]; if (!cLoc) return null;
-                        return <line key={`${loc.id}-${cId}`} x1={`${loc.mapX}%`} y1={`${loc.mapY}%`} x2={`${cLoc.mapX}%`} y2={`${cLoc.mapY}%`} stroke="#222" strokeWidth="1" />;
+                        const isCurrentRoute = (loc.id === currentLocation && cId === selectedMapLocation) || 
+                                             (cId === currentLocation && loc.id === selectedMapLocation);
+                        return <line key={`${loc.id}-${cId}`} x1={`${loc.mapX}%`} y1={`${loc.mapY}%`} x2={`${cLoc.mapX}%`} y2={`${cLoc.mapY}%`} 
+                          stroke={isCurrentRoute ? '#6cf' : '#222'} strokeWidth={isCurrentRoute ? '2' : '1'} 
+                          strokeDasharray={isCurrentRoute ? '5,5' : 'none'} />;
                       }))}
                     </svg>
-                    {Object.values(LOCATIONS).map(loc => (
-                      <div key={loc.id} style={{
-                        position: 'absolute', left: `${loc.mapX}%`, top: `${loc.mapY}%`, transform: 'translate(-50%, -50%)',
-                        width: loc.id === currentLocation ? '12px' : '8px', height: loc.id === currentLocation ? '12px' : '8px',
-                        borderRadius: '50%', background: loc.id === currentLocation ? '#ff0' : loc.tags.type === 'city' ? '#6cf' : '#f66',
-                        cursor: 'pointer', boxShadow: loc.id === currentLocation ? '0 0 8px #ff0' : 'none', transition: 'all 0.2s',
-                      }} onClick={() => setSelectedMapLocation(loc.id)}
-                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.5)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1)'; }} />
-                    ))}
+                    
+                    {Object.values(LOCATIONS).map(loc => {
+                      const getIcon = () => {
+                        if (loc.id === currentLocation) return '📍';
+                        switch(loc.tags.type) {
+                          case 'city': return '🏰';
+                          case 'camp': return '⛺';
+                          case 'dungeon': return '🏛️';
+                          case 'continent': return '🌍';
+                          case 'special': return '✨';
+                          default: return '⚔️';
+                        }
+                      };
+                      
+                      const getColor = () => {
+                        if (loc.id === currentLocation) return '#ff0';
+                        switch(loc.tags.type) {
+                          case 'city': return '#6cf';
+                          case 'camp': return '#6f6';
+                          case 'dungeon': return '#f66';
+                          case 'continent': return '#c6f';
+                          case 'special': return '#fc6';
+                          default: return '#f86';
+                        }
+                      };
+                      
+                      const isAccessible = location?.connectedTo.includes(loc.id) || loc.id === currentLocation;
+                      
+                      return (
+                        <div key={loc.id} style={{
+                          position: 'absolute', left: `${loc.mapX}%`, top: `${loc.mapY}%`, transform: 'translate(-50%, -50%)',
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
+                          cursor: 'pointer', transition: 'all 0.2s',
+                          opacity: isAccessible ? 1 : 0.4,
+                        }} onClick={() => setSelectedMapLocation(loc.id)}
+                          onMouseEnter={(e) => { e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.3)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1)'; }}>
+                          <div style={{ fontSize: loc.id === currentLocation ? '16px' : '12px', filter: loc.id === currentLocation ? 'drop-shadow(0 0 4px #ff0)' : 'none' }}>
+                            {getIcon()}
+                          </div>
+                          <div style={{ 
+                            fontSize: '6px', color: getColor(), 
+                            textShadow: loc.id === currentLocation ? '0 0 4px #ff0' : 'none',
+                            whiteSpace: 'nowrap',
+                            background: '#0a0a1a',
+                            padding: '1px 3px',
+                            borderRadius: '2px',
+                          }}>
+                            {loc.name}
+                          </div>
+                        </div>
+                      );
+                    })}
 
                     {selectedMapLocation && (() => {
                       const selectedLoc = LOCATIONS[selectedMapLocation];
                       if (!selectedLoc) return null;
                       const canTravel = location?.connectedTo.includes(selectedMapLocation);
+                      
+                      const getTypeName = () => {
+                        switch(selectedLoc.tags.type) {
+                          case 'city': return '🏰 Город';
+                          case 'camp': return '⛺ Лагерь';
+                          case 'dungeon': return '🏛️ Подземелье';
+                          case 'continent': return '🌍 Материк';
+                          case 'special': return '✨ Особая локация';
+                          default: return '⚔️ Дикая местность';
+                        }
+                      };
+                      
                       return (
-                        <div className="fade-in" style={{ position: 'absolute', bottom: '8px', left: '8px', right: '8px', background: '#0a0a1a', border: '1px solid #6cf', padding: '8px', fontSize: '9px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                            <span style={{ color: '#6cf' }}>{selectedLoc.name}</span>
+                        <div className="fade-in" style={{ position: 'absolute', bottom: '8px', left: '8px', right: '8px', background: '#0a0a1a', border: '1px solid #6cf', padding: '10px', fontSize: '9px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <span style={{ color: '#6cf', fontSize: '10px' }}>{selectedLoc.name}</span>
                             <button className="btn" style={{ fontSize: '7px', padding: '2px 6px' }} onClick={() => setSelectedMapLocation(null)}>✕ Назад</button>
                           </div>
-                          <div style={{ color: '#e0e0e0', marginBottom: '6px', fontSize: '8px' }}>{selectedLoc.description}</div>
-                          <div style={{ color: '#6cf', fontSize: '8px', marginBottom: '6px' }}>Опасность: {'⚠️'.repeat(selectedLoc.tags.dangerLevel)}</div>
-                          {selectedMapLocation === currentLocation ? <div style={{ color: '#ff0', fontSize: '8px' }}>📍 Ты здесь</div> :
-                            canTravel ? <button className="btn" style={{ fontSize: '8px', padding: '4px 8px' }} onClick={() => { game.travel(selectedMapLocation); setSelectedMapLocation(null); }}>→ Отправиться</button> :
-                              <div style={{ color: '#555', fontSize: '8px' }}>Нет пути</div>}
+                          <div style={{ color: '#888', fontSize: '8px', marginBottom: '4px' }}>{getTypeName()}</div>
+                          <div style={{ color: '#e0e0e0', marginBottom: '8px', fontSize: '8px', lineHeight: '1.4' }}>{selectedLoc.description}</div>
+                          
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '8px', fontSize: '8px' }}>
+                            <div>
+                              <div style={{ color: '#6cf', marginBottom: '2px' }}>⚠️ Опасность:</div>
+                              <div style={{ color: '#f66' }}>{'⚠️'.repeat(selectedLoc.tags.dangerLevel)} ({selectedLoc.tags.dangerLevel}/10)</div>
+                            </div>
+                            <div>
+                              <div style={{ color: '#6cf', marginBottom: '2px' }}>🔗 Связи:</div>
+                              <div style={{ color: '#e0e0e0' }}>{selectedLoc.connectedTo.length} локации</div>
+                            </div>
+                          </div>
+                          
+                          {selectedLoc.enemies.length > 0 && (
+                            <div style={{ marginBottom: '6px', fontSize: '8px' }}>
+                              <div style={{ color: '#f66', marginBottom: '2px' }}>👹 Враги:</div>
+                              <div style={{ color: '#e0e0e0' }}>{selectedLoc.enemies.map(eId => ENEMIES[eId]?.name).join(', ')}</div>
+                            </div>
+                          )}
+                          
+                          {selectedLoc.resources.length > 0 && (
+                            <div style={{ marginBottom: '6px', fontSize: '8px' }}>
+                              <div style={{ color: '#6f6', marginBottom: '2px' }}>📦 Ресурсы:</div>
+                              <div style={{ color: '#e0e0e0' }}>{selectedLoc.resources.map(rId => ITEMS[rId]?.name).join(', ')}</div>
+                            </div>
+                          )}
+                          
+                          {selectedMapLocation === currentLocation ? 
+                            <div style={{ color: '#ff0', fontSize: '9px', textAlign: 'center', padding: '4px', background: '#1a1a0a', border: '1px solid #ff0' }}>
+                              📍 Ты здесь
+                            </div> :
+                            canTravel ? 
+                              <button className="btn success" style={{ fontSize: '9px', padding: '6px 12px', width: '100%' }} 
+                                onClick={() => { game.travel(selectedMapLocation); setSelectedMapLocation(null); }}>
+                                → Отправиться в {selectedLoc.name}
+                              </button> :
+                              <div style={{ color: '#555', fontSize: '8px', textAlign: 'center', padding: '4px', background: '#0a0a0a' }}>
+                                🔒 Нет прямого пути (нужно идти через связанные локации)
+                              </div>
+                          }
                         </div>
                       );
                     })()}
@@ -595,7 +701,11 @@ function App() {
                         const loc = LOCATIONS[locId];
                         return <button key={locId} className="btn" onClick={() => game.travel(locId)}>→ {loc?.name} [⚠️{loc?.tags.dangerLevel}]</button>;
                       })}
-                      {location?.tags.type === 'city' && <button className="btn success" onClick={game.rest}>🏨 Отдохнуть (5 золота)</button>}
+                      {(location?.tags.type === 'city' || location?.tags.type === 'camp') && 
+                        <button className="btn success" onClick={game.rest}>
+                          🏨 Отдохнуть ({location?.tags.type === 'city' ? 5 : 2} золота)
+                        </button>
+                      }
                     </div>
                   </div>
                 )}
@@ -797,6 +907,18 @@ function App() {
                         <span className="stat-key">💎 MP</span>
                       </Tooltip>
                       <span className="stat-total">{hero.currentMp} / {effectiveStats.maxMp}</span>
+                    </div>
+                    <div className="stat-row">
+                      <Tooltip text="Регенерация HP за ход. Восстанавливается вне боя.">
+                        <span className="stat-key">💚 Реген. HP</span>
+                      </Tooltip>
+                      <span className="stat-total" style={{ color: '#6f6' }}>+{effectiveStats.hpRegen}/ход</span>
+                    </div>
+                    <div className="stat-row">
+                      <Tooltip text="Регенерация MP за ход. Восстанавливается вне боя.">
+                        <span className="stat-key">💙 Реген. MP</span>
+                      </Tooltip>
+                      <span className="stat-total" style={{ color: '#6cf' }}>+{effectiveStats.mpRegen}/ход</span>
                     </div>
                   </div>
                   

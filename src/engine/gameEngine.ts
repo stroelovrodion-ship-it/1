@@ -17,6 +17,7 @@ function createInitialHero(): HeroState {
     baseStats: {
       str: 5, agi: 5, int: 8, lck: 3,
       maxHp: 50, maxMp: 30, armor: 2,
+      hpRegen: 2, mpRegen: 1,
       firePower: 2, waterPower: 2, earthPower: 2,
       airPower: 2, lightPower: 2, darkPower: 2,
     },
@@ -361,16 +362,25 @@ export function useGameState() {
       if (!prev.battle.enemy || prev.battle.enemy.currentHp <= 0) return prev;
       const enemy = prev.battle.enemy;
       const stats = getEffectiveStats(prev.hero);
+      
+      // Регенерация HP и MP в конце хода
+      const regenHp = Math.min(stats.maxHp, prev.hero.currentHp + stats.hpRegen);
+      const regenMp = Math.min(stats.maxMp, prev.hero.currentMp + stats.mpRegen);
+      
       if (rand(1, 100) <= stats.agi * 2) {
-        return { ...prev, battle: { ...prev.battle, log: [...prev.battle.log, { text: `💨 ${enemy.template.name} промахивается!`, type: 'info' as const, turn: prev.battle.turn }], playerTurn: true, turn: prev.battle.turn + 1 } };
+        return { 
+          ...prev, 
+          hero: { ...prev.hero, currentHp: regenHp, currentMp: regenMp },
+          battle: { ...prev.battle, log: [...prev.battle.log, { text: `💨 ${enemy.template.name} промахивается!`, type: 'info' as const, turn: prev.battle.turn }], playerTurn: true, turn: prev.battle.turn + 1 } 
+        };
       }
       const finalDmg = Math.max(1, enemy.template.baseDamage + rand(-1, 2) - Math.floor(stats.armor / 3));
-      const newHp = Math.max(0, prev.hero.currentHp - finalDmg);
+      const newHp = Math.max(0, regenHp - finalDmg);
       const newLog: BattleLogEntry = { text: `💢 ${enemy.template.name} атакует! Урон: ${finalDmg}`, type: 'damage', turn: prev.battle.turn };
       if (newHp <= 0) {
-        return { ...prev, hero: { ...prev.hero, currentHp: 0 }, battle: { ...prev.battle, log: [...prev.battle.log, newLog], active: false, enemy: null, turn: prev.battle.turn + 1 }, eventLog: [...prev.eventLog, { text: '💀 Ты пал в бою...', type: 'combat' as const, time: prev.gameTime }] };
+        return { ...prev, hero: { ...prev.hero, currentHp: 0, currentMp: regenMp }, battle: { ...prev.battle, log: [...prev.battle.log, newLog], active: false, enemy: null, turn: prev.battle.turn + 1 }, eventLog: [...prev.eventLog, { text: '💀 Ты пал в бою...', type: 'combat' as const, time: prev.gameTime }] };
       }
-      return { ...prev, hero: { ...prev.hero, currentHp: newHp }, battle: { ...prev.battle, log: [...prev.battle.log, newLog], playerTurn: true, turn: prev.battle.turn + 1 } };
+      return { ...prev, hero: { ...prev.hero, currentHp: newHp, currentMp: regenMp }, battle: { ...prev.battle, log: [...prev.battle.log, newLog], playerTurn: true, turn: prev.battle.turn + 1 } };
     });
   }, []);
 
@@ -499,11 +509,12 @@ export function useGameState() {
 
   const rest = useCallback(() => {
     const location = LOCATIONS[state.currentLocation];
-    if (!location || location.tags.type !== 'city') return;
-    if (state.hero.gold < 5) { addLog('❌ Недостаточно золота (нужно 5).', 'system'); return; }
+    if (!location || (location.tags.type !== 'city' && location.tags.type !== 'camp')) return;
+    const cost = location.tags.type === 'city' ? 5 : 2;
+    if (state.hero.gold < cost) { addLog(`❌ Недостаточно золота (нужно ${cost}).`, 'system'); return; }
     const stats = getEffectiveStats(state.hero);
-    setState(prev => ({ ...prev, hero: { ...prev.hero, currentHp: stats.maxHp, currentMp: stats.maxMp, gold: prev.hero.gold - 5 } }));
-    addLog('🏨 Отдых. HP/MP восстановлены. (-5 золота)', 'system');
+    setState(prev => ({ ...prev, hero: { ...prev.hero, currentHp: stats.maxHp, currentMp: stats.maxMp, gold: prev.hero.gold - cost } }));
+    addLog(`🏨 Отдых. HP/MP восстановлены. (-${cost} золота)`, 'system');
   }, [state.hero, state.currentLocation, addLog]);
 
   // ─── КОНСТРУКТОР ───

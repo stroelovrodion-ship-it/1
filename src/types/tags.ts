@@ -67,8 +67,13 @@ export interface TooltipData {
 export type RuneType = 'time' | 'effect' | 'unique';
 
 // ─── Локации ───
-export type LocationType = 'city' | 'dungeon' | 'wild' | 'special';
-export type LocationId = 'ashen_harbor' | 'crystal_spire' | 'rusty_port' | 'ruins' | 'crystal_wastes' | 'cursed_forest' | 'underground';
+export type LocationType = 'city' | 'dungeon' | 'wild' | 'special' | 'camp' | 'continent';
+export type LocationId = 
+  | 'ashen_harbor' | 'crystal_spire' | 'rusty_port' 
+  | 'ruins' | 'crystal_wastes' | 'cursed_forest' | 'underground'
+  | 'nomad_camp' | 'trader_camp' | 'hunter_camp'
+  | 'northern_continent' | 'southern_continent' | 'eastern_continent'
+  | 'forgotten_ruins' | 'ancient_library' | 'dragon_peak';
 
 // ─── Типы врагов ───
 export type EnemyType = 'undead' | 'beast' | 'elemental' | 'demon' | 'human' | 'construct';
@@ -192,6 +197,8 @@ export interface ItemStatBonus {
   maxHp?: number;
   maxMp?: number;
   armor?: number;
+  hpRegen?: number;
+  mpRegen?: number;
   firePower?: number;
   waterPower?: number;
   earthPower?: number;
@@ -275,6 +282,9 @@ export interface HeroStats {
   maxHp: number;
   maxMp: number;
   armor: number;
+  // Регенерация
+  hpRegen: number;
+  mpRegen: number;
   // Сила стихий
   firePower: number;
   waterPower: number;
