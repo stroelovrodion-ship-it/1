@@ -1,0 +1,230 @@
+import { Item } from '../types/tags';
+
+// ═══════════════════════════════════════════════
+// ПРЕДМЕТЫ — каждый определяется тегами
+// ═══════════════════════════════════════════════
+
+export const ITEMS: Record<string, Item> = {
+  // ─── ОРУЖИЕ ───
+  rusty_sword: {
+    id: 'rusty_sword',
+    name: 'Ржавый меч',
+    description: 'Старый меч, найденный в руинах. Ещё режет.',
+    tags: { slot: 'weapon', material: 'metal', rarity: 'common', element: 'none', level: 1 },
+    stats: { damage: 3 },
+    value: 10,
+  },
+  crystal_staff: {
+    id: 'crystal_staff',
+    name: 'Кристальный посох',
+    description: 'Посох из живого кристалла. Пульсирует энергией.',
+    tags: { slot: 'weapon', material: 'crystal', rarity: 'uncommon', element: 'lightning', level: 3 },
+    stats: { damage: 2, int: 3, maxMp: 5 },
+    value: 50,
+  },
+  shadow_blade: {
+    id: 'shadow_blade',
+    name: 'Клинок теней',
+    description: 'Лезвие соткано из чистой тьмы. Режет саму реальность.',
+    tags: { slot: 'weapon', material: 'essence', rarity: 'rare', element: 'shadow', level: 5 },
+    stats: { damage: 7, agi: 2, lck: 1 },
+    value: 150,
+  },
+  bone_dagger: {
+    id: 'bone_dagger',
+    name: 'Костяной кинжал',
+    description: 'Вырезан из кости древнего существа.',
+    tags: { slot: 'weapon', material: 'bone', rarity: 'common', element: 'none', level: 2 },
+    stats: { damage: 4, agi: 1 },
+    value: 25,
+  },
+
+  // ─── БРОНЯ: ТЕЛО ───
+  cloth_robe: {
+    id: 'cloth_robe',
+    name: 'Тканевая мантия',
+    description: 'Простая мантия начинающего мага.',
+    tags: { slot: 'body', material: 'cloth', rarity: 'common', element: 'none', level: 1 },
+    stats: { armor: 1, int: 1 },
+    value: 15,
+  },
+  leather_armor: {
+    id: 'leather_armor',
+    name: 'Кожаный доспех',
+    description: 'Прочная кожа, обработанная алхимиками.',
+    tags: { slot: 'body', material: 'leather', rarity: 'uncommon', element: 'none', level: 3 },
+    stats: { armor: 4, agi: 1 },
+    value: 60,
+  },
+  crystal_plate: {
+    id: 'crystal_plate',
+    name: 'Кристальный нагрудник',
+    description: 'Пластины из живого кристалла. Светятся в темноте.',
+    tags: { slot: 'body', material: 'crystal', rarity: 'rare', element: 'ice', level: 5 },
+    stats: { armor: 7, vit: 2, maxHp: 10 },
+    value: 200,
+  },
+
+  // ─── БРОНЯ: ГОЛОВА ───
+  cloth_hood: {
+    id: 'cloth_hood',
+    name: 'Тканевый капюшон',
+    description: 'Простой капюшон. Защищает от ветра.',
+    tags: { slot: 'head', material: 'cloth', rarity: 'common', element: 'none', level: 1 },
+    stats: { armor: 1, int: 1 },
+    value: 10,
+  },
+  bone_helm: {
+    id: 'bone_helm',
+    name: 'Костяной шлем',
+    description: 'Шлем из костей. Пугающе выглядит.',
+    tags: { slot: 'head', material: 'bone', rarity: 'uncommon', element: 'shadow', level: 3 },
+    stats: { armor: 3, vit: 1 },
+    value: 45,
+  },
+
+  // ─── БРОНЯ: ОБУВЬ ───
+  leather_boots: {
+    id: 'leather_boots',
+    name: 'Кожаные сапоги',
+    description: 'Удобные сапоги для долгих странствий.',
+    tags: { slot: 'boots', material: 'leather', rarity: 'common', element: 'none', level: 1 },
+    stats: { armor: 1, agi: 1 },
+    value: 12,
+  },
+  crystal_greaves: {
+    id: 'crystal_greaves',
+    name: 'Кристальные поножи',
+    description: 'Лёгкие и прочные. Ускоряют владельца.',
+    tags: { slot: 'boots', material: 'crystal', rarity: 'rare', element: 'lightning', level: 4 },
+    stats: { armor: 2, agi: 3, speed: 2 },
+    value: 120,
+  },
+
+  // ─── АКСЕССУАРЫ ───
+  iron_ring: {
+    id: 'iron_ring',
+    name: 'Железное кольцо',
+    description: 'Простое кольцо. Немного укрепляет.',
+    tags: { slot: 'ring', material: 'metal', rarity: 'common', element: 'none', level: 1 },
+    stats: { str: 1, vit: 1 },
+    value: 20,
+  },
+  essence_amulet: {
+    id: 'essence_amulet',
+    name: 'Амулет эссенции',
+    description: 'Пульсирует магической энергией.',
+    tags: { slot: 'necklace', material: 'essence', rarity: 'uncommon', element: 'life', level: 3 },
+    stats: { int: 2, maxMp: 8 },
+    value: 80,
+  },
+
+  // ─── РАСХОДНИКИ ───
+  minor_hp_potion: {
+    id: 'minor_hp_potion',
+    name: 'Малое зелье здоровья',
+    description: 'Восстанавливает немного HP.',
+    tags: { consumable: 'potion', effect: 'heal', rarity: 'common', material: 'herb', level: 1, craftable: { tier: 1, recipe: [{ materialId: 'herb', count: 2 }] } },
+    effectValue: 15,
+    value: 5,
+    stackable: true,
+    maxStack: 99,
+  },
+  major_hp_potion: {
+    id: 'major_hp_potion',
+    name: 'Большое зелье здоровья',
+    description: 'Восстанавливает значительную часть HP.',
+    tags: { consumable: 'potion', effect: 'heal', rarity: 'uncommon', material: 'herb', level: 3, craftable: { tier: 2, recipe: [{ materialId: 'herb', count: 3 }, { materialId: 'essence', count: 1 }] } },
+    effectValue: 40,
+    value: 20,
+    stackable: true,
+    maxStack: 99,
+  },
+  minor_mp_potion: {
+    id: 'minor_mp_potion',
+    name: 'Малое зелье маны',
+    description: 'Восстанавливает немного MP.',
+    tags: { consumable: 'potion', effect: 'heal', rarity: 'common', material: 'herb', element: 'life', level: 1, craftable: { tier: 1, recipe: [{ materialId: 'herb', count: 1 }, { materialId: 'crystal', count: 1 }] } },
+    effectValue: 10,
+    value: 8,
+    stackable: true,
+    maxStack: 99,
+  },
+  fire_bomb: {
+    id: 'fire_bomb',
+    name: 'Огненная бомба',
+    description: 'Взрывается при ударе. Наносит урон огнём.',
+    tags: { consumable: 'bomb', effect: 'damage', rarity: 'uncommon', material: 'essence', element: 'fire', level: 2 },
+    effectValue: 25,
+    value: 15,
+    stackable: true,
+    maxStack: 20,
+  },
+  scroll_of_shield: {
+    id: 'scroll_of_shield',
+    name: 'Свиток щита',
+    description: 'Создаёт магический барьер.',
+    tags: { consumable: 'scroll', effect: 'shield', rarity: 'uncommon', material: 'cloth', element: 'none', level: 2 },
+    effectValue: 20,
+    effectDuration: 3,
+    value: 25,
+    stackable: true,
+    maxStack: 10,
+  },
+
+  // ─── МАТЕРИАЛЫ (для крафта) ───
+  herb: {
+    id: 'herb',
+    name: 'Целебная трава',
+    description: 'Растёт в проклятом лесу. Основа зелий.',
+    tags: { material: 'herb', rarity: 'common', element: 'life', level: 1 },
+    value: 2,
+    stackable: true,
+    maxStack: 99,
+  },
+  crystal_shard: {
+    id: 'crystal_shard',
+    name: 'Осколок кристалла',
+    description: 'Фрагмент живого кристалла. Содержит магию.',
+    tags: { material: 'crystal', rarity: 'uncommon', element: 'lightning', level: 2 },
+    value: 8,
+    stackable: true,
+    maxStack: 99,
+  },
+  bone_fragment: {
+    id: 'bone_fragment',
+    name: 'Фрагмент кости',
+    description: 'Кость мёртвого существа. Пахнет тленом.',
+    tags: { material: 'bone', rarity: 'common', element: 'shadow', level: 1 },
+    value: 3,
+    stackable: true,
+    maxStack: 99,
+  },
+  dark_essence: {
+    id: 'dark_essence',
+    name: 'Тёмная эссенция',
+    description: 'Сгусток чистой магической энергии.',
+    tags: { material: 'essence', rarity: 'rare', element: 'shadow', level: 4 },
+    value: 25,
+    stackable: true,
+    maxStack: 50,
+  },
+  leather_piece: {
+    id: 'leather_piece',
+    name: 'Кусок кожи',
+    description: 'Прочная кожа. Подходит для брони.',
+    tags: { material: 'leather', rarity: 'common', element: 'none', level: 1 },
+    value: 3,
+    stackable: true,
+    maxStack: 99,
+  },
+  metal_ore: {
+    id: 'metal_ore',
+    name: 'Руда',
+    description: 'Кусок руды. Можно выковать оружие.',
+    tags: { material: 'metal', rarity: 'common', element: 'none', level: 1 },
+    value: 4,
+    stackable: true,
+    maxStack: 99,
+  },
+};
