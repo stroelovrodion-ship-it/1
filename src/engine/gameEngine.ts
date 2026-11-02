@@ -196,8 +196,9 @@ export function useGameState() {
     const bpData = enemy.template.bodyParts.find(bp => bp.part === targetPart);
     let baseDmg = stats.str + rand(0, 2);
     let multiplier = 1;
-    if (bpData?.weakness) { multiplier = 1.2; addBattleLog(`Слабость в ${targetPart}! x1.2`, 'info'); }
-    if (bpData?.resistance) { multiplier = 0.7; addBattleLog(`Сопротивление в ${targetPart}! x0.7`, 'info'); }
+    // Базовая атака не имеет стихии, но всё равно проверяем общие модификаторы
+    if (bpData?.weakness) { multiplier = 1.1; addBattleLog(`💡 Эта часть уязвима! x1.1`, 'info'); }
+    if (bpData?.resistance) { multiplier = 0.9; addBattleLog(`🛡 Эта часть защищена! x0.9`, 'info'); }
     const finalDmg = Math.max(1, Math.floor((baseDmg - Math.floor(enemy.template.armor / 2)) * multiplier));
     const newEnemyHp = Math.max(0, enemy.currentHp - finalDmg);
     addBattleLog(`Атака в ${targetPart}! Урон: ${finalDmg}`, 'damage');
@@ -260,8 +261,10 @@ export function useGameState() {
 
       const bpData = enemy.template.bodyParts.find(bp => bp.part === part);
       let multiplier = 1;
-      if (bpData?.weakness === element) { multiplier = 1.5; addBattleLog(`Слабость к ${element}! x1.5`, 'info'); }
-      if (bpData?.resistance === element) { multiplier = 0.5; addBattleLog(`Сопротивление к ${element}! x0.5`, 'info'); }
+      if (element !== 'none') {
+        if (bpData?.weakness === element) { multiplier = 1.5; addBattleLog(`💥 ОБНАРУЖЕНА СЛАБОСТЬ к ${element}! x1.5 урон!`, 'info'); }
+        else if (bpData?.resistance === element) { multiplier = 0.5; addBattleLog(`🛡 ОБНАРУЖЕНО СОПРОТИВЛЕНИЕ к ${element}! x0.5 урон...`, 'info'); }
+      }
 
       const finalDmg = Math.max(1, Math.floor(totalDamage * multiplier));
       const newEnemyHp = Math.max(0, enemy.currentHp - finalDmg);

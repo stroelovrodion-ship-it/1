@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useGameState } from './engine/gameEngine';
 import { LOCATIONS } from './data/locations';
-import { RUNES, SPELL_FORMS, SCROLL_EFFECTS } from './data/runes';
+import { RUNES } from './data/runes';
 import { ITEMS } from './data/items';
 import { ENEMIES } from './data/enemies';
-import { SlotType, RarityType, BodyPart, ElementType } from './types/tags';
+import { SlotType, RarityType, BodyPart, ElementType, LocationId } from './types/tags';
 
 function App() {
   const game = useGameState();
@@ -15,6 +15,7 @@ function App() {
   const [rightTopTab, setRightTopTab] = useState('inv');
   const [rightBottomTab, setRightBottomTab] = useState('study');
   const [showMap, setShowMap] = useState(false);
+  const [selectedMapLocation, setSelectedMapLocation] = useState<LocationId | null>(null);
   const [activeSpellSlot, setActiveSpellSlot] = useState(0);
 
   const battleLogRef = useRef<HTMLDivElement>(null);
@@ -31,10 +32,6 @@ function App() {
   const slotNames: Record<SlotType, string> = {
     head: 'Голова', body: 'Тело', boots: 'Обувь', weapon: 'Оружие',
     extra: 'Доп', artifact: 'Артефакт', ring: 'Кольцо', necklace: 'Ожерелье',
-  };
-
-  const elementEmoji: Record<ElementType, string> = {
-    fire: '🔥', water: '💧', earth: '🪨', air: '💨', light: '✨', dark: '🌑', none: '—',
   };
 
   const bodyPartNames: Record<BodyPart, string> = {
@@ -100,7 +97,7 @@ function App() {
                     </div>
                   </div>
 
-                  {/* Выбор части тела для атаки */}
+                  {/* Выбор части тела */}
                   {battle.active && enemy && (
                     <div style={{ marginBottom: '8px' }}>
                       <div style={{ fontSize: '8px', color: '#6cf', marginBottom: '4px' }}>Цель:</div>
@@ -110,8 +107,6 @@ function App() {
                             style={{ fontSize: '8px', padding: '3px 6px' }}
                             onClick={() => game.selectBodyPart(bp.part)}>
                             {bodyPartNames[bp.part]}
-                            {bp.weakness && <span style={{ color: '#6f6' }}>⚡</span>}
-                            {bp.resistance && <span style={{ color: '#f66' }}>🛡</span>}
                           </button>
                         ))}
                       </div>
@@ -136,7 +131,6 @@ function App() {
                     </button>
                   </div>
 
-                  {/* Слот 1 — на себя */}
                   {battle.active && hero.spellSlots[0]?.runes.length > 0 && (
                     <button className="btn success" disabled={!battle.playerTurn}
                       onClick={() => game.castSpell(0)} style={{ fontSize: '8px' }}>
@@ -151,59 +145,96 @@ function App() {
               </div>
             </div>
 
-            {/* ПУТЕШЕСТВИЕ (бывш. Города) */}
+            {/* ПУТЕШЕСТВИЕ */}
             <div className={`pane ${leftTab === 'travel' ? 'active' : ''}`}>
               <div className="location-panel">
                 <div className="location-name">{location?.name} {location?.tags.type === 'city' ? '🏰' : '⚔️'}</div>
                 <div className="location-desc">{location?.description}</div>
-                <button className="btn" onClick={() => setShowMap(!showMap)} style={{ marginBottom: '8px' }}>
+                
+                <button className="btn" onClick={() => { setShowMap(!showMap); setSelectedMapLocation(null); }} style={{ marginBottom: '8px' }}>
                   🗺️ {showMap ? 'Скрыть карту' : 'Показать карту'}
                 </button>
+
                 {showMap && (
-                  <div className="fade-in" style={{ border: '1px solid #333', padding: '8px', marginBottom: '8px', position: 'relative', height: '150px', background: '#050510' }}>
+                  <div className="fade-in" style={{ border: '1px solid #333', padding: '8px', marginBottom: '8px', position: 'relative', height: '200px', background: '#050510' }}>
+                    {/* Линии связей */}
+                    <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+                      {Object.values(LOCATIONS).map(loc => loc.connectedTo.map(cId => {
+                        const cLoc = LOCATIONS[cId];
+                        if (!cLoc) return null;
+                        return <line key={`${loc.id}-${cId}`} x1={`${loc.mapX}%`} y1={`${loc.mapY}%`} x2={`${cLoc.mapX}%`} y2={`${cLoc.mapY}%`} stroke="#222" strokeWidth="1" />;
+                      }))}
+                    </svg>
+
+                    {/* Точки локаций */}
                     {Object.values(LOCATIONS).map(loc => (
                       <div key={loc.id}
                         style={{
                           position: 'absolute',
                           left: `${loc.mapX}%`, top: `${loc.mapY}%`,
                           transform: 'translate(-50%, -50%)',
-                          fontSize: '7px',
-                          color: loc.id === currentLocation ? '#ff0' : loc.tags.type === 'city' ? '#6cf' : '#f66',
+                          width: loc.id === currentLocation ? '12px' : '8px',
+                          height: loc.id === currentLocation ? '12px' : '8px',
+                          borderRadius: '50%',
+                          background: loc.id === currentLocation ? '#ff0' : loc.tags.type === 'city' ? '#6cf' : '#f66',
                           cursor: 'pointer',
-                          textShadow: loc.id === currentLocation ? '0 0 6px #ff0' : 'none',
-                          whiteSpace: 'nowrap',
+                          boxShadow: loc.id === currentLocation ? '0 0 8px #ff0' : 'none',
+                          transition: 'all 0.2s',
                         }}
-                        onClick={() => {
-                          if (location?.connectedTo.includes(loc.id as any)) game.travel(loc.id);
-                        }}
-                      >
-                        {loc.tags.type === 'city' ? '🏰' : '⚔️'} {loc.name}
-                      </div>
+                        onClick={() => setSelectedMapLocation(loc.id)}
+                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.5)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1)'; }}
+                      />
                     ))}
-                    {/* Линии связей */}
-                    <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-                      {Object.values(LOCATIONS).map(loc => loc.connectedTo.map(cId => {
-                        const cLoc = LOCATIONS[cId];
-                        if (!cLoc) return null;
-                        return <line key={`${loc.id}-${cId}`} x1={`${loc.mapX}%`} y1={`${loc.mapY}%`} x2={`${cLoc.mapX}%`} y2={`${cLoc.mapY}%`} stroke="#333" strokeWidth="1" />;
-                      }))}
-                    </svg>
+
+                    {/* Инфо о выбранной локации */}
+                    {selectedMapLocation && (() => {
+                      const selectedLoc = LOCATIONS[selectedMapLocation];
+                      if (!selectedLoc) return null;
+                      const canTravel = location?.connectedTo.includes(selectedMapLocation);
+                      return (
+                        <div className="fade-in" style={{
+                          position: 'absolute', bottom: '8px', left: '8px', right: '8px',
+                          background: '#0a0a1a', border: '1px solid #6cf', padding: '8px',
+                          fontSize: '9px',
+                        }}>
+                          <div style={{ color: '#6cf', marginBottom: '4px' }}>{selectedLoc.name}</div>
+                          <div style={{ color: '#e0e0e0', marginBottom: '6px', fontSize: '8px' }}>{selectedLoc.description}</div>
+                          <div style={{ color: '#6cf', fontSize: '8px', marginBottom: '6px' }}>Опасность: {'⚠️'.repeat(selectedLoc.tags.dangerLevel)}</div>
+                          {selectedMapLocation === currentLocation ? (
+                            <div style={{ color: '#ff0', fontSize: '8px' }}>📍 Ты здесь</div>
+                          ) : canTravel ? (
+                            <button className="btn" style={{ fontSize: '8px', padding: '4px 8px' }}
+                              onClick={() => { game.travel(selectedMapLocation); setSelectedMapLocation(null); }}>
+                              → Отправиться
+                            </button>
+                          ) : (
+                            <div style={{ color: '#555', fontSize: '8px' }}>Нет пути</div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
-                <div style={{ fontSize: '9px', color: '#6cf', marginBottom: '8px' }}>Куда идти:</div>
-                <div className="location-actions">
-                  {location?.connectedTo.map(locId => {
-                    const loc = LOCATIONS[locId];
-                    return (
-                      <button key={locId} className="btn" onClick={() => game.travel(locId)}>
-                        → {loc?.name} [⚠️{loc?.tags.dangerLevel}]
-                      </button>
-                    );
-                  })}
-                  {location?.tags.type === 'city' && (
-                    <button className="btn success" onClick={game.rest}>🏨 Отдохнуть (5 золота)</button>
-                  )}
-                </div>
+
+                {!showMap && (
+                  <div>
+                    <div style={{ fontSize: '9px', color: '#6cf', marginBottom: '8px' }}>Куда идти:</div>
+                    <div className="location-actions">
+                      {location?.connectedTo.map(locId => {
+                        const loc = LOCATIONS[locId];
+                        return (
+                          <button key={locId} className="btn" onClick={() => game.travel(locId)}>
+                            → {loc?.name} [⚠️{loc?.tags.dangerLevel}]
+                          </button>
+                        );
+                      })}
+                      {location?.tags.type === 'city' && (
+                        <button className="btn success" onClick={game.rest}>🏨 Отдохнуть (5 золота)</button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -241,7 +272,7 @@ function App() {
                         <div className="info-block">
                           <div className="info-prop">Редкость: <span className={rarityClass(item.tags.rarity)}>{item.tags.rarity}</span></div>
                           {item.tags.slot && <div className="info-prop">Слот: <span>{slotNames[item.tags.slot]}</span></div>}
-                          {item.tags.element && item.tags.element !== 'none' && <div className="info-prop">Стихия: <span>{elementEmoji[item.tags.element]} {item.tags.element}</span></div>}
+                          {item.tags.element && item.tags.element !== 'none' && <div className="info-prop">Стихия: <span>{item.tags.element}</span></div>}
                         </div>
                         {item.stats && <div className="info-block"><div className="info-block-sep">// БОНУСЫ</div>
                           {Object.entries(item.stats).map(([key, val]) => val ? <div key={key} className="info-prop">{key}: <span className="val-buff">+{val}</span></div> : null)}
@@ -319,69 +350,92 @@ function App() {
 
               {/* КОНСТРУКТОР МАГИИ */}
               <div className={`pane ${rightTopTab === 'mana' ? 'active' : ''}`}>
-                <div className="mana-tech">
-                  <div className="mana-tech-title">// КОНСТРУКТОР МАГИИ [ОЧСМ: {hero.osmMax}]</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
+                  <div style={{ color: '#6cf', fontSize: '9px', letterSpacing: '1px', borderBottom: '1px dashed #333', paddingBottom: '4px' }}>
+                    // КОНСТРУКТОР МАГИИ [ОЧСМ: {hero.osmMax}]
+                  </div>
 
                   {/* Выбор слота */}
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
                     {hero.spellSlots.map((slot, idx) => (
                       <button key={idx} className={`btn ${activeSpellSlot === idx ? 'success' : ''}`}
-                        onClick={() => setActiveSpellSlot(idx)} style={{ fontSize: '8px' }}>
-                        Слот {idx + 1} [{slot.target === 'self' ? 'на себя' : 'на врага'}]
-                        {slot.runes.length > 0 && ` (${slot.mpCost} MP)`}
+                        onClick={() => setActiveSpellSlot(idx)} style={{ fontSize: '8px', flex: 1 }}>
+                        Слот {idx + 1}
                       </button>
                     ))}
                   </div>
 
-                  {/* Переключатель цели */}
-                  <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
-                    <button className={`btn ${hero.spellSlots[activeSpellSlot]?.target === 'self' ? '' : ''}`}
-                      style={{ fontSize: '8px', opacity: hero.spellSlots[activeSpellSlot]?.target === 'self' ? 1 : 0.5 }}
-                      onClick={() => game.setSpellTarget(activeSpellSlot, 'self')}>
-                      На себя
-                    </button>
-                    <button className={`btn`}
-                      style={{ fontSize: '8px', opacity: hero.spellSlots[activeSpellSlot]?.target === 'enemy' ? 1 : 0.5 }}
-                      onClick={() => game.setSpellTarget(activeSpellSlot, 'enemy')}>
-                      На врага
-                    </button>
-                  </div>
+                  {/* Текущий слот */}
+                  <div style={{ border: '1px solid #6cf', padding: '10px', background: '#050510' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <div style={{ fontSize: '9px', color: '#6cf' }}>
+                        {hero.spellSlots[activeSpellSlot]?.target === 'self' ? '✨ На себя' : '⚔️ На врага'}
+                      </div>
+                      <div style={{ fontSize: '8px', color: '#c6f' }}>
+                        {hero.spellSlots[activeSpellSlot]?.mpCost || 0} MP
+                      </div>
+                    </div>
 
-                  {/* Размещённые руны */}
-                  <div style={{ border: '1px solid #333', padding: '6px', marginBottom: '8px', minHeight: '40px' }}>
-                    <div style={{ fontSize: '8px', color: '#6cf', marginBottom: '4px' }}>Руны в слоте {activeSpellSlot + 1}:</div>
-                    {hero.spellSlots[activeSpellSlot]?.runes.length === 0 ? <div className="placeholder">Пусто. Добавь руны ↓</div> :
-                      hero.spellSlots[activeSpellSlot]?.runes.map((runeId, idx) => {
-                        const rune = RUNES[runeId];
-                        if (!rune) return null;
-                        return (
-                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '8px', marginBottom: '2px' }}>
-                            <span style={{ color: rune.type === 'time' ? '#6cf' : rune.type === 'effect' ? '#f66' : '#c6f' }}>
-                              {rune.name} [{rune.osmCost} ОЧСМ]
-                            </span>
-                            <button className="btn danger" style={{ fontSize: '7px', padding: '1px 4px' }}
-                              onClick={() => game.removeRuneFromSlot(activeSpellSlot, idx)}>✕</button>
-                          </div>
-                        );
-                      })
-                    }
+                    {/* Переключатель цели */}
+                    <div style={{ display: 'flex', gap: '4px', marginBottom: '10px' }}>
+                      <button className={`btn ${hero.spellSlots[activeSpellSlot]?.target === 'self' ? '' : ''}`}
+                        style={{ fontSize: '7px', flex: 1, opacity: hero.spellSlots[activeSpellSlot]?.target === 'self' ? 1 : 0.4 }}
+                        onClick={() => game.setSpellTarget(activeSpellSlot, 'self')}>
+                        На себя
+                      </button>
+                      <button className={`btn`}
+                        style={{ fontSize: '7px', flex: 1, opacity: hero.spellSlots[activeSpellSlot]?.target === 'enemy' ? 1 : 0.4 }}
+                        onClick={() => game.setSpellTarget(activeSpellSlot, 'enemy')}>
+                        На врага
+                      </button>
+                    </div>
+
+                    {/* Размещённые руны */}
+                    <div style={{ fontSize: '8px', color: '#6cf', marginBottom: '6px' }}>Руны:</div>
+                    {hero.spellSlots[activeSpellSlot]?.runes.length === 0 ? (
+                      <div className="placeholder" style={{ textAlign: 'center', padding: '10px' }}>Пусто</div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {hero.spellSlots[activeSpellSlot]?.runes.map((runeId, idx) => {
+                          const rune = RUNES[runeId];
+                          if (!rune) return null;
+                          return (
+                            <div key={idx} style={{
+                              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                              padding: '6px', border: '1px solid #333', background: '#0a0a1a',
+                            }}>
+                              <div>
+                                <div style={{ fontSize: '8px', color: rune.type === 'time' ? '#6cf' : rune.type === 'effect' ? '#f66' : '#c6f' }}>
+                                  {rune.name}
+                                </div>
+                                <div style={{ fontSize: '7px', color: '#888' }}>{rune.osmCost} ОЧСМ</div>
+                              </div>
+                              <button className="btn danger" style={{ fontSize: '7px', padding: '2px 6px' }}
+                                onClick={() => game.removeRuneFromSlot(activeSpellSlot, idx)}>✕</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   {/* Доступные руны */}
-                  <div style={{ fontSize: '8px', color: '#6cf', marginBottom: '4px' }}>Доступные руны:</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', overflowY: 'auto', maxHeight: '120px' }}>
-                    {hero.collectedRunes.map(runeId => {
-                      const rune = RUNES[runeId];
-                      if (!rune) return null;
-                      return (
-                        <button key={runeId} className="btn" style={{ fontSize: '7px', textAlign: 'left', padding: '3px 6px' }}
-                          onClick={() => game.addRuneToSlot(activeSpellSlot, runeId)}>
-                          <span style={{ color: rune.type === 'time' ? '#6cf' : rune.type === 'effect' ? '#f66' : '#c6f' }}>
-                            [{rune.type === 'time' ? 'В' : rune.type === 'effect' ? 'Э' : 'У'}]
-                          </span> {rune.name} [{rune.osmCost}]
-                        </button>
-                      );
-                    })}
+                  <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ fontSize: '8px', color: '#6cf', marginBottom: '6px' }}>Доступные руны:</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', overflowY: 'auto', flex: 1 }}>
+                      {hero.collectedRunes.map(runeId => {
+                        const rune = RUNES[runeId];
+                        if (!rune) return null;
+                        return (
+                          <button key={runeId} className="btn" style={{ fontSize: '7px', textAlign: 'left', padding: '4px 8px' }}
+                            onClick={() => game.addRuneToSlot(activeSpellSlot, runeId)}>
+                            <span style={{ color: rune.type === 'time' ? '#6cf' : rune.type === 'effect' ? '#f66' : '#c6f' }}>
+                              [{rune.type === 'time' ? 'В' : rune.type === 'effect' ? 'Э' : 'У'}]
+                            </span> {rune.name} <span style={{ color: '#888' }}>[{rune.osmCost}]</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -395,7 +449,7 @@ function App() {
                     XP: {hero.xp}/{hero.xpToNext} | Золото: <span style={{ color: '#fc6' }}>{hero.gold}</span>
                   </div>
                   <div style={{ fontSize: '9px', color: '#c6f', marginBottom: '8px' }}>
-                    ОЧСМ: {hero.osmMax} (руны за уровень +2)
+                    ОЧСМ: {hero.osmMax}
                   </div>
                   <div className="hero-stats-list">
                     <div className="stat-row"><span className="stat-key">HP</span><span className="stat-total">{hero.currentHp}/{effectiveStats.maxHp}</span></div>
@@ -433,8 +487,6 @@ function App() {
                           {template.bodyParts.map(bp => (
                             <div key={bp.part} style={{ fontSize: '8px', color: '#e0e0e0', paddingLeft: '8px' }}>
                               {bodyPartNames[bp.part]}
-                              {bp.weakness && <span style={{ color: '#6f6' }}> ⚡{bp.weakness}</span>}
-                              {bp.resistance && <span style={{ color: '#f66' }}> 🛡{bp.resistance}</span>}
                             </div>
                           ))}
                         </div>
@@ -475,8 +527,6 @@ function App() {
                         background: battle.selectedBodyPart === bp.part ? '#1a1a0a' : 'transparent',
                       }} onClick={() => battle.active && game.selectBodyPart(bp.part)}>
                         <span style={{ color: '#e0e0e0' }}>{bodyPartNames[bp.part]}</span>
-                        {bp.weakness && <span style={{ color: '#6f6', marginLeft: '6px' }}>⚡{bp.weakness}</span>}
-                        {bp.resistance && <span style={{ color: '#f66', marginLeft: '6px' }}>🛡{bp.resistance}</span>}
                         {enemy.bodyPartDamage[bp.part] > 0 && <span style={{ color: '#f66', marginLeft: '6px' }}>[{enemy.bodyPartDamage[bp.part]} dmg]</span>}
                       </div>
                     ))}
