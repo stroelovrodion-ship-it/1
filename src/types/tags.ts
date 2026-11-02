@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-// СИСТЕМА ТЕГОВ — ядро архитектуры
+// СИСТЕМА ТЕГОВ v2 — Конструктор магии
 // ═══════════════════════════════════════════════
 
 // ─── Слоты экипировки ───
@@ -16,13 +16,22 @@ export type MaterialType =
 export type RarityType = 'common' | 'uncommon' | 'rare' | 'epic' | 'artifact';
 
 // ─── Стихии ───
-export type ElementType = 'fire' | 'ice' | 'lightning' | 'shadow' | 'life' | 'chaos' | 'none';
+export type ElementType = 'fire' | 'water' | 'earth' | 'air' | 'light' | 'dark' | 'none';
 
 // ─── Расходники ───
 export type ConsumableType = 'potion' | 'scroll' | 'bomb' | 'food';
 
 // ─── Эффекты ───
-export type EffectType = 'heal' | 'damage' | 'buff' | 'debuff' | 'shield' | 'poison' | 'stun';
+export type EffectType = 'heal' | 'damage' | 'buff' | 'debuff' | 'shield' | 'burn' | 'freeze' | 'shock' | 'blind' | 'poison';
+
+// ─── Части тела врага ───
+export type BodyPart = 'head' | 'torso' | 'arms' | 'legs' | 'wings' | 'tail';
+
+// ─── Формы заклинаний ───
+export type SpellForm = 'bolt' | 'arrow' | 'sphere' | 'wave' | 'beam' | 'nova';
+
+// ─── Типы рун ───
+export type RuneType = 'time' | 'effect' | 'unique';
 
 // ─── Локации ───
 export type LocationType = 'city' | 'dungeon' | 'wild' | 'special';
@@ -33,14 +42,49 @@ export type EnemyType = 'undead' | 'beast' | 'elemental' | 'demon' | 'human' | '
 export type EnemyBehavior = 'aggressive' | 'passive' | 'defensive' | 'magical';
 export type EnemyRarity = 'common' | 'uncommon' | 'rare' | 'boss';
 
-// ─── Школы магии ───
-export type MagicSchool = 'elements' | 'shadows' | 'life' | 'chaos';
+// ═══════════════════════════════════════════════
+// РУНЫ
+// ═══════════════════════════════════════════════
 
-// ─── Цели способностей ───
-export type AbilityTarget = 'self' | 'enemy' | 'all_enemies' | 'ally';
+export interface Rune {
+  id: string;
+  name: string;
+  description: string;
+  type: RuneType;
+  osmCost: number; // очки силы магии
+  element?: ElementType;
+  effect?: EffectType;
+  form?: SpellForm;
+  bodyPart?: BodyPart;
+  value: number; // урон/лечение/бафф
+  duration?: number;
+  chance?: number; // шанс срабатывания эффекта
+  level: number;
+}
 
 // ═══════════════════════════════════════════════
-// ИНТЕРФЕЙСЫ ТЕГИРОВАННЫХ ОБЪЕКТОВ
+// КОНСТРУКТОР ЗАКЛИНАНИЙ
+// ═══════════════════════════════════════════════
+
+export interface SpellSlot {
+  name: string;
+  runes: string[]; // id рун, макс 3: 2 времени + 1 эффект/уникальная
+  mpCost: number;
+  target: 'self' | 'enemy';
+}
+
+// Заклинание на себя: руны времени + эффект/уникальная
+// Заклинание на врага: элемент + часть тела + форма + доп.эффект
+
+export interface EnemyBodyPartData {
+  part: BodyPart;
+  weakness?: ElementType;
+  resistance?: ElementType;
+  multiplier?: number; // доп множитель
+}
+
+// ═══════════════════════════════════════════════
+// ПРЕДМЕТЫ
 // ═══════════════════════════════════════════════
 
 export interface ItemTags {
@@ -51,6 +95,8 @@ export interface ItemTags {
   consumable?: ConsumableType;
   effect?: EffectType;
   level: number;
+  isRune?: boolean;
+  isScroll?: boolean;
   craftable?: {
     tier: number;
     recipe: { materialId: string; count: number }[];
@@ -61,13 +107,16 @@ export interface ItemStatBonus {
   str?: number;
   agi?: number;
   int?: number;
-  vit?: number;
   lck?: number;
   maxHp?: number;
   maxMp?: number;
   armor?: number;
-  damage?: number;
-  speed?: number;
+  firePower?: number;
+  waterPower?: number;
+  earthPower?: number;
+  airPower?: number;
+  lightPower?: number;
+  darkPower?: number;
 }
 
 export interface Item {
@@ -78,10 +127,14 @@ export interface Item {
   stats?: ItemStatBonus;
   effectValue?: number;
   effectDuration?: number;
-  value: number; // цена в золоте
+  value: number;
   stackable?: boolean;
   maxStack?: number;
 }
+
+// ═══════════════════════════════════════════════
+// ВРАГИ
+// ═══════════════════════════════════════════════
 
 export interface EnemyTags {
   location: LocationId[];
@@ -106,45 +159,27 @@ export interface EnemyTemplate {
   baseHp: number;
   baseDamage: number;
   armor: number;
-  speed: number;
-  abilities: string[]; // ability ids
+  bodyParts: EnemyBodyPartData[];
   loot: EnemyLoot;
-  weaknesses: ElementType[];
-  resistances: ElementType[];
+  abilities: string[];
 }
 
-export interface LocationTags {
-  type: LocationType;
-  dangerLevel: number;
-}
+// ═══════════════════════════════════════════════
+// ЛОКАЦИИ
+// ═══════════════════════════════════════════════
 
 export interface Location {
   id: LocationId;
   name: string;
   description: string;
-  tags: LocationTags;
-  enemies: string[]; // enemy template ids
-  resources: string[]; // material ids
+  tags: { type: LocationType; dangerLevel: number };
+  enemies: string[];
+  resources: string[];
+  runeDrops?: string[];
   connectedTo: LocationId[];
   events: string[];
-}
-
-export interface AbilityTags {
-  school: MagicSchool;
-  target: AbilityTarget;
-  effect: EffectType;
-  element: ElementType;
-}
-
-export interface Ability {
-  id: string;
-  name: string;
-  description: string;
-  tags: AbilityTags;
-  mpCost: number;
-  level: number;
-  basePower: number;
-  cooldown: number;
+  mapX: number;
+  mapY: number;
 }
 
 // ═══════════════════════════════════════════════
@@ -155,13 +190,17 @@ export interface HeroStats {
   str: number;
   agi: number;
   int: number;
-  vit: number;
   lck: number;
   maxHp: number;
   maxMp: number;
   armor: number;
-  damage: number;
-  speed: number;
+  // Сила стихий
+  firePower: number;
+  waterPower: number;
+  earthPower: number;
+  airPower: number;
+  lightPower: number;
+  darkPower: number;
 }
 
 export interface HeroState {
@@ -173,9 +212,13 @@ export interface HeroState {
   baseStats: HeroStats;
   currentHp: number;
   currentMp: number;
+  osm: number; // очки силы магии (макс слотов рун)
+  osmMax: number;
   equipped: Record<SlotType, Item | null>;
   inventory: InventoryItem[];
-  abilities: string[]; // ability ids
+  spellSlots: SpellSlot[]; // 2 слота в начале
+  collectedRunes: string[]; // id рун, которые найдены
+  knownScrolls: string[]; // id свитков (доп.эффекты)
   bestiary: Record<string, BestiaryEntry>;
 }
 
@@ -196,6 +239,7 @@ export interface BattleState {
   log: BattleLogEntry[];
   turn: number;
   playerTurn: boolean;
+  selectedBodyPart: BodyPart | null;
 }
 
 export interface EnemyInstance {
@@ -204,6 +248,7 @@ export interface EnemyInstance {
   maxHp: number;
   buffs: StatusEffect[];
   debuffs: StatusEffect[];
+  bodyPartDamage: Record<BodyPart, number>; // урон по частям
 }
 
 export interface StatusEffect {
@@ -211,6 +256,7 @@ export interface StatusEffect {
   value: number;
   duration: number;
   source: string;
+  element?: ElementType;
 }
 
 export interface BattleLogEntry {

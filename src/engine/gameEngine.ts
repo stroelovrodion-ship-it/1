@@ -1,31 +1,27 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import {
-  GameState, HeroState, BattleState, EventLogEntry,
-  Item, SlotType, InventoryItem, EnemyInstance,
-  BattleLogEntry, LocationId, StatusEffect, EffectType
+  GameState, HeroState, EventLogEntry,
+  Item, SlotType, EnemyInstance,
+  BattleLogEntry, LocationId, BodyPart,
+  SpellSlot, Rune, ElementType
 } from '../types/tags';
 import { ITEMS } from '../data/items';
 import { ENEMIES } from '../data/enemies';
 import { LOCATIONS } from '../data/locations';
-import { ABILITIES } from '../data/abilities';
-
-// ═══════════════════════════════════════════════
-// НАЧАЛЬНОЕ СОСТОЯНИЕ
-// ═══════════════════════════════════════════════
+import { RUNES, SPELL_FORMS, SCROLL_EFFECTS } from '../data/runes';
 
 function createInitialHero(): HeroState {
   return {
     name: 'Неофит',
-    level: 1,
-    xp: 0,
-    xpToNext: 50,
-    gold: 20,
+    level: 1, xp: 0, xpToNext: 50, gold: 20,
     baseStats: {
-      str: 5, agi: 5, int: 7, vit: 5, lck: 3,
-      maxHp: 30, maxMp: 15, armor: 0, damage: 3, speed: 5,
+      str: 3, agi: 4, int: 5, lck: 3,
+      maxHp: 30, maxMp: 20, armor: 0,
+      firePower: 1, waterPower: 1, earthPower: 1,
+      airPower: 1, lightPower: 1, darkPower: 1,
     },
-    currentHp: 30,
-    currentMp: 15,
+    currentHp: 30, currentMp: 20,
+    osm: 4, osmMax: 4,
     equipped: {
       head: null, body: null, boots: null, weapon: null,
       extra: null, artifact: null, ring: null, necklace: null,
@@ -34,7 +30,12 @@ function createInitialHero(): HeroState {
       { item: ITEMS.minor_hp_potion, count: 3 },
       { item: ITEMS.minor_mp_potion, count: 2 },
     ],
-    abilities: ['fireball', 'heal'],
+    spellSlots: [
+      { name: 'Слот 1', runes: [], mpCost: 0, target: 'self' },
+      { name: 'Слот 2', runes: [], mpCost: 0, target: 'enemy' },
+    ],
+    collectedRunes: ['time_instant', 'effect_fire'],
+    knownScrolls: ['bolt', 'arrow'],
     bestiary: {},
   };
 }
@@ -43,28 +44,18 @@ function createInitialState(): GameState {
   return {
     hero: createInitialHero(),
     currentLocation: 'ashen_harbor',
-    battle: { active: false, enemy: null, log: [], turn: 0, playerTurn: true },
-    eventLog: [{
-      text: 'Ты очнулся среди пепла. Вокруг — руины Пепельной Гавани. Мир изменился...',
-      type: 'story',
-      time: 0,
-    }],
+    battle: { active: false, enemy: null, log: [], turn: 0, playerTurn: true, selectedBodyPart: null },
+    eventLog: [{ text: 'Ты очнулся среди пепла. Мир после Великого Раскола...', type: 'story', time: 0 }],
     gameTime: 0,
   };
 }
-
-// ═══════════════════════════════════════════════
-// ХЕЛПЕРЫ
-// ═══════════════════════════════════════════════
 
 function getEffectiveStats(hero: HeroState) {
   const stats = { ...hero.baseStats };
   Object.values(hero.equipped).forEach(item => {
     if (item?.stats) {
       Object.entries(item.stats).forEach(([key, val]) => {
-        if (val && key in stats) {
-          (stats as any)[key] += val;
-        }
+        if (val && key in stats) (stats as any)[key] += val;
       });
     }
   });
@@ -75,20 +66,28 @@ function rand(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function pickRandom<T>(arr: T[]): T {
+function pickRandom<T extends string>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// ═══════════════════════════════════════════════
-// ХУК ИГРОВОГО СОСТОЯНИЯ
-// ═══════════════════════════════════════════════
+function getElementPower(stats: ReturnType<typeof getEffectiveStats>, element: ElementType): number {
+  switch (element) {
+    case 'fire': return stats.firePower;
+    case 'water': return stats.waterPower;
+    case 'earth': return stats.earthPower;
+    case 'air': return stats.airPower;
+    case 'light': return stats.lightPower;
+    case 'dark': return stats.darkPower;
+    default: return 0;
+  }
+}
 
 export function useGameState() {
   const [state, setState] = useState<GameState>(createInitialState);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
-  const [abilityMenu, setAbilityMenu] = useState(false);
-  const [itemMenu, setItemMenu] = useState(false);
-  const cooldownsRef = useRef<Record<string, number>>({});
+  const [spellBuilder, setSpellBuilder] = useState<{ slotIndex: number; runes: string[]; form: string; scrollEffect: string; targetPart: BodyPart | null; element: ElementType }>({
+    slotIndex: 0, runes: [], form: 'bolt', scrollEffect: '', targetPart: null, element: 'fire'
+  });
 
   const addLog = useCallback((text: string, type: EventLogEntry['type'] = 'system') => {
     setState(prev => ({
@@ -101,10 +100,7 @@ export function useGameState() {
   const addBattleLog = useCallback((text: string, type: BattleLogEntry['type'] = 'info') => {
     setState(prev => ({
       ...prev,
-      battle: {
-        ...prev.battle,
-        log: [...prev.battle.log, { text, type, turn: prev.battle.turn }],
-      },
+      battle: { ...prev.battle, log: [...prev.battle.log, { text, type, turn: prev.battle.turn }] },
     }));
   }, []);
 
@@ -113,31 +109,16 @@ export function useGameState() {
     setState(prev => {
       const invItem = prev.hero.inventory[invIndex];
       if (!invItem || !invItem.item.tags.slot) return prev;
-
       const slot = invItem.item.tags.slot as SlotType;
       const newInventory = [...prev.hero.inventory];
       const oldEquipped = prev.hero.equipped[slot];
-
-      // Снимаем старое
       if (oldEquipped) {
         const existingIdx = newInventory.findIndex(i => i.item.id === oldEquipped.id);
-        if (existingIdx >= 0) {
-          newInventory[existingIdx] = { ...newInventory[existingIdx], count: newInventory[existingIdx].count + 1 };
-        } else {
-          newInventory.push({ item: oldEquipped, count: 1 });
-        }
+        if (existingIdx >= 0) newInventory[existingIdx] = { ...newInventory[existingIdx], count: newInventory[existingIdx].count + 1 };
+        else newInventory.push({ item: oldEquipped, count: 1 });
       }
-
-      // Надеваем новое
       newInventory[invIndex] = { ...invItem, count: invItem.count - 1 };
-      const filtered = newInventory.filter(i => i.count > 0);
-
-      const newEquipped = { ...prev.hero.equipped, [slot]: invItem.item };
-
-      return {
-        ...prev,
-        hero: { ...prev.hero, inventory: filtered, equipped: newEquipped },
-      };
+      return { ...prev, hero: { ...prev.hero, inventory: newInventory.filter(i => i.count > 0), equipped: { ...prev.hero.equipped, [slot]: invItem.item } } };
     });
     addLog('Предмет экипирован.', 'system');
   }, [addLog]);
@@ -146,56 +127,30 @@ export function useGameState() {
     setState(prev => {
       const item = prev.hero.equipped[slot];
       if (!item) return prev;
-
       const newInventory = [...prev.hero.inventory];
       const existingIdx = newInventory.findIndex(i => i.item.id === item.id);
-      if (existingIdx >= 0) {
-        newInventory[existingIdx] = { ...newInventory[existingIdx], count: newInventory[existingIdx].count + 1 };
-      } else {
-        newInventory.push({ item, count: 1 });
-      }
-
-      return {
-        ...prev,
-        hero: {
-          ...prev.hero,
-          equipped: { ...prev.hero.equipped, [slot]: null },
-          inventory: newInventory,
-        },
-      };
+      if (existingIdx >= 0) newInventory[existingIdx] = { ...newInventory[existingIdx], count: newInventory[existingIdx].count + 1 };
+      else newInventory.push({ item, count: 1 });
+      return { ...prev, hero: { ...prev.hero, equipped: { ...prev.hero.equipped, [slot]: null }, inventory: newInventory } };
     });
     addLog('Предмет снят.', 'system');
   }, [addLog]);
 
-  // ─── ИСПОЛЬЗОВАНИЕ ПРЕДМЕТА ───
-  const useItem = useCallback((invIndex: number, inBattle = false) => {
+  const useItem = useCallback((invIndex: number) => {
     setState(prev => {
       const invItem = prev.hero.inventory[invIndex];
-      if (!invItem) return prev;
+      if (!invItem || !invItem.item.tags.consumable) return prev;
       const item = invItem.item;
-
-      if (!item.tags.consumable) return prev;
-
+      const stats = getEffectiveStats(prev.hero);
       let newHp = prev.hero.currentHp;
       let newMp = prev.hero.currentMp;
-      const stats = getEffectiveStats(prev.hero);
-
       if (item.tags.effect === 'heal') {
-        if (item.tags.element === 'life' || item.id.includes('mp')) {
-          newMp = Math.min(stats.maxMp, newMp + (item.effectValue || 0));
-        } else {
-          newHp = Math.min(stats.maxHp, newHp + (item.effectValue || 0));
-        }
+        if (item.id.includes('mp')) newMp = Math.min(stats.maxMp, newMp + (item.effectValue || 0));
+        else newHp = Math.min(stats.maxHp, newHp + (item.effectValue || 0));
       }
-
       const newInventory = [...prev.hero.inventory];
       newInventory[invIndex] = { ...invItem, count: invItem.count - 1 };
-      const filtered = newInventory.filter(i => i.count > 0);
-
-      return {
-        ...prev,
-        hero: { ...prev.hero, currentHp: newHp, currentMp: newMp, inventory: filtered },
-      };
+      return { ...prev, hero: { ...prev.hero, currentHp: newHp, currentMp: newMp, inventory: newInventory.filter(i => i.count > 0) } };
     });
   }, []);
 
@@ -203,22 +158,10 @@ export function useGameState() {
   const travel = useCallback((locationId: LocationId) => {
     const location = LOCATIONS[locationId];
     if (!location) return;
-
-    setState(prev => ({
-      ...prev,
-      currentLocation: locationId,
-    }));
-
+    setState(prev => ({ ...prev, currentLocation: locationId }));
     addLog(`Ты прибыл в: ${location.name}`, 'story');
-
-    // Шанс встречи с врагом
-    if (location.enemies.length > 0) {
-      setTimeout(() => {
-        const encounterChance = 0.6;
-        if (Math.random() < encounterChance) {
-          startBattle(locationId);
-        }
-      }, 500);
+    if (location.enemies.length > 0 && Math.random() < 0.6) {
+      setTimeout(() => startBattle(locationId), 500);
     }
   }, [addLog]);
 
@@ -227,288 +170,136 @@ export function useGameState() {
     const locId = locationId || state.currentLocation;
     const location = LOCATIONS[locId];
     if (!location || location.enemies.length === 0) return;
-
-    // Выбираем врага по редкости
     const enemyId = pickRandom(location.enemies);
     const template = ENEMIES[enemyId];
     if (!template) return;
-
+    const bodyPartDamage: Record<string, number> = {};
+    template.bodyParts.forEach(bp => { bodyPartDamage[bp.part] = 0; });
     const enemyInstance: EnemyInstance = {
-      template,
-      currentHp: template.baseHp,
-      maxHp: template.baseHp,
-      buffs: [],
-      debuffs: [],
+      template, currentHp: template.baseHp, maxHp: template.baseHp,
+      buffs: [], debuffs: [], bodyPartDamage: bodyPartDamage as Record<BodyPart, number>,
     };
-
     setState(prev => ({
       ...prev,
-      battle: {
-        active: true,
-        enemy: enemyInstance,
-        log: [],
-        turn: 1,
-        playerTurn: true,
-      },
+      battle: { active: true, enemy: enemyInstance, log: [], turn: 1, playerTurn: true, selectedBodyPart: null },
+      hero: { ...prev.hero, bestiary: { ...prev.hero.bestiary, [enemyId]: { enemyId, kills: prev.hero.bestiary[enemyId]?.kills || 0, discovered: true } } },
     }));
-
-    addLog(`⚔️ Встречен враг: ${template.name}!`, 'combat');
+    addLog(`⚔️ Встречен: ${template.name}!`, 'combat');
     addBattleLog(`Появляется ${template.name} (Ур. ${template.level})`, 'system');
-
-    // Добавляем в бистеарий
-    setState(prev => ({
-      ...prev,
-      hero: {
-        ...prev.hero,
-        bestiary: {
-          ...prev.hero.bestiary,
-          [enemyId]: {
-            enemyId,
-            kills: prev.hero.bestiary[enemyId]?.kills || 0,
-            discovered: true,
-          },
-        },
-      },
-    }));
   }, [state.currentLocation, addLog, addBattleLog]);
 
-  // ─── АТАКА ───
-  const playerAttack = useCallback(() => {
+  // ─── АТАКА (базовая — по выбранной части тела) ───
+  const playerAttack = useCallback((targetPart: BodyPart) => {
     if (!state.battle.active || !state.battle.enemy || !state.battle.playerTurn) return;
-
     const stats = getEffectiveStats(state.hero);
     const enemy = state.battle.enemy;
-    const baseDmg = stats.damage + stats.str;
-    const damage = Math.max(1, baseDmg - Math.floor(enemy.template.armor / 2) + rand(-1, 2));
-
-    // Крит
-    const critChance = stats.lck * 2;
-    const isCrit = rand(1, 100) <= critChance;
-    const finalDmg = isCrit ? damage * 2 : damage;
-
+    const bpData = enemy.template.bodyParts.find(bp => bp.part === targetPart);
+    let baseDmg = stats.str + rand(0, 2);
+    let multiplier = 1;
+    if (bpData?.weakness) { multiplier = 1.2; addBattleLog(`Слабость в ${targetPart}! x1.2`, 'info'); }
+    if (bpData?.resistance) { multiplier = 0.7; addBattleLog(`Сопротивление в ${targetPart}! x0.7`, 'info'); }
+    const finalDmg = Math.max(1, Math.floor((baseDmg - Math.floor(enemy.template.armor / 2)) * multiplier));
     const newEnemyHp = Math.max(0, enemy.currentHp - finalDmg);
-
-    addBattleLog(
-      `Ты атакуешь! ${isCrit ? '💥 КРИТ! ' : ''}Урон: ${finalDmg}`,
-      'damage'
-    );
-
+    addBattleLog(`Атака в ${targetPart}! Урон: ${finalDmg}`, 'damage');
+    const newBodyPartDmg = { ...enemy.bodyPartDamage, [targetPart]: (enemy.bodyPartDamage[targetPart] || 0) + finalDmg };
     setState(prev => ({
       ...prev,
-      battle: {
-        ...prev.battle,
-        enemy: prev.battle.enemy ? { ...prev.battle.enemy, currentHp: newEnemyHp } : null,
-        playerTurn: false,
-      },
+      battle: { ...prev.battle, enemy: prev.battle.enemy ? { ...prev.battle.enemy, currentHp: newEnemyHp, bodyPartDamage: newBodyPartDmg } : null, playerTurn: false },
     }));
-
-    if (newEnemyHp <= 0) {
-      setTimeout(() => endBattle(true), 600);
-    } else {
-      setTimeout(() => enemyTurn(), 800);
-    }
+    if (newEnemyHp <= 0) setTimeout(() => endBattle(true), 600);
+    else setTimeout(() => enemyTurn(), 800);
   }, [state.battle, state.hero, addBattleLog]);
 
-  // ─── СПОСОБНОСТЬ ───
-  const useAbility = useCallback((abilityId: string) => {
+  // ─── КАСТ ЗАКЛИНАНИЯ ───
+  const castSpell = useCallback((slotIndex: number, targetPart?: BodyPart) => {
     if (!state.battle.active || !state.battle.enemy || !state.battle.playerTurn) return;
-
-    const ability = ABILITIES[abilityId];
-    if (!ability) return;
-    if (state.hero.currentMp < ability.mpCost) {
-      addBattleLog('Недостаточно маны!', 'info');
-      return;
-    }
-    if (cooldownsRef.current[abilityId] > 0) {
-      addBattleLog('Способность на перезарядке!', 'info');
-      return;
-    }
+    const slot = state.hero.spellSlots[slotIndex];
+    if (!slot || slot.runes.length === 0) { addBattleLog('Слот пуст!', 'info'); return; }
+    if (state.hero.currentMp < slot.mpCost) { addBattleLog('Недостаточно маны!', 'info'); return; }
 
     const stats = getEffectiveStats(state.hero);
     const enemy = state.battle.enemy;
 
-    setState(prev => ({
-      ...prev,
-      hero: { ...prev.hero, currentMp: prev.hero.currentMp - ability.mpCost },
-    }));
+    // Рассчитываем урон/эффект по рунам
+    let totalDamage = 0;
+    let totalHeal = 0;
+    let element: ElementType = 'none';
+    let effect: string | undefined;
+    let effectChance = 0;
 
-    if (ability.cooldown > 0) {
-      cooldownsRef.current[abilityId] = ability.cooldown;
-    }
-
-    if (ability.tags.effect === 'damage') {
-      const magDmg = ability.basePower + Math.floor(stats.int * 1.5);
-      let finalDmg = magDmg;
-
-      // Проверка слабостей/сопротивлений
-      if (enemy.template.weaknesses.includes(ability.tags.element)) {
-        finalDmg = Math.floor(finalDmg * 1.5);
-        addBattleLog('Слабость! x1.5 урон!', 'info');
+    slot.runes.forEach(runeId => {
+      const rune = RUNES[runeId];
+      if (!rune) return;
+      if (rune.element) element = rune.element;
+      if (rune.effect) effect = rune.effect;
+      if (rune.chance) effectChance = Math.max(effectChance, rune.chance);
+      if (rune.type === 'effect' || rune.type === 'unique') {
+        const elemPower = getElementPower(stats, rune.element || 'none');
+        totalDamage += rune.value + elemPower * 2;
+        if (rune.effect === 'heal') { totalHeal = rune.value + Math.floor(stats.int * 1.5); totalDamage = 0; }
       }
-      if (enemy.template.resistances.includes(ability.tags.element)) {
-        finalDmg = Math.floor(finalDmg * 0.5);
-        addBattleLog('Сопротивление! x0.5 урон...', 'info');
-      }
+    });
 
-      // Кража жизни
-      let healAmount = 0;
-      if (abilityId === 'life_drain') {
-        healAmount = Math.floor(finalDmg * 0.5);
-      }
+    setState(prev => ({ ...prev, hero: { ...prev.hero, currentMp: prev.hero.currentMp - slot.mpCost } }));
 
-      const newEnemyHp = Math.max(0, enemy.currentHp - finalDmg);
-
-      addBattleLog(`${ability.name}! Урон: ${finalDmg}`, 'damage');
-
-      setState(prev => ({
-        ...prev,
-        battle: {
-          ...prev.battle,
-          enemy: prev.battle.enemy ? { ...prev.battle.enemy, currentHp: newEnemyHp } : null,
-          playerTurn: false,
-        },
-        hero: {
-          ...prev.hero,
-          currentHp: healAmount > 0 ? Math.min(getEffectiveStats(prev.hero).maxHp, prev.hero.currentHp + healAmount) : prev.hero.currentHp,
-        },
-      }));
-
-      if (healAmount > 0) {
-        addBattleLog(`Ты восстановил ${healAmount} HP!`, 'heal');
-      }
-
-      if (newEnemyHp <= 0) {
-        setTimeout(() => endBattle(true), 600);
+    if (slot.target === 'self') {
+      if (totalHeal > 0) {
+        const maxHp = getEffectiveStats(state.hero).maxHp;
+        const newHp = Math.min(maxHp, state.hero.currentHp + totalHeal);
+        addBattleLog(`Заклинание: +${totalHeal} HP`, 'heal');
+        setState(prev => ({ ...prev, hero: { ...prev.hero, currentHp: newHp }, battle: { ...prev.battle, playerTurn: false } }));
       } else {
-        setTimeout(() => enemyTurn(), 800);
+        addBattleLog('Заклинание на себя активировано!', 'info');
+        setState(prev => ({ ...prev, battle: { ...prev.battle, playerTurn: false } }));
       }
-    } else if (ability.tags.effect === 'heal') {
-      const healAmount = ability.basePower + Math.floor(stats.int * 0.5);
-      const maxHp = getEffectiveStats(state.hero).maxHp;
-      const newHp = Math.min(maxHp, state.hero.currentHp + healAmount);
+      setTimeout(() => enemyTurn(), 800);
+    } else {
+      // На врага — нужна часть тела
+      const part = targetPart || state.battle.selectedBodyPart;
+      if (!part) { addBattleLog('Выбери часть тела!', 'info'); return; }
 
-      addBattleLog(`${ability.name}! +${healAmount} HP`, 'heal');
+      const bpData = enemy.template.bodyParts.find(bp => bp.part === part);
+      let multiplier = 1;
+      if (bpData?.weakness === element) { multiplier = 1.5; addBattleLog(`Слабость к ${element}! x1.5`, 'info'); }
+      if (bpData?.resistance === element) { multiplier = 0.5; addBattleLog(`Сопротивление к ${element}! x0.5`, 'info'); }
 
+      const finalDmg = Math.max(1, Math.floor(totalDamage * multiplier));
+      const newEnemyHp = Math.max(0, enemy.currentHp - finalDmg);
+      addBattleLog(`Заклинание в ${part}! ${element} урон: ${finalDmg}`, 'damage');
+
+      // Доп.эффект
+      if (effect && Math.random() * 100 < effectChance) {
+        addBattleLog(`Эффект ${effect} сработал!`, 'info');
+      }
+
+      const newBodyPartDmg = { ...enemy.bodyPartDamage, [part]: (enemy.bodyPartDamage[part] || 0) + finalDmg };
       setState(prev => ({
         ...prev,
-        hero: { ...prev.hero, currentHp: newHp },
-        battle: { ...prev.battle, playerTurn: false },
+        battle: { ...prev.battle, enemy: prev.battle.enemy ? { ...prev.battle.enemy, currentHp: newEnemyHp, bodyPartDamage: newBodyPartDmg } : null, playerTurn: false },
       }));
 
-      setTimeout(() => enemyTurn(), 800);
-    } else if (ability.tags.effect === 'shield') {
-      addBattleLog(`${ability.name}! Щит: ${ability.basePower}`, 'info');
-
-      setState(prev => ({
-        ...prev,
-        battle: {
-          ...prev.battle,
-          enemy: prev.battle.enemy ? {
-            ...prev.battle.enemy,
-            buffs: [...prev.battle.enemy.buffs],
-          } : null,
-          playerTurn: false,
-        },
-      }));
-
-      setTimeout(() => enemyTurn(), 800);
-    } else if (ability.tags.effect === 'debuff') {
-      addBattleLog(`${ability.name}! Враг ослаблен!`, 'info');
-
-      setState(prev => ({
-        ...prev,
-        battle: {
-          ...prev.battle,
-          enemy: prev.battle.enemy ? {
-            ...prev.battle.enemy,
-            debuffs: [...prev.battle.enemy.debuffs, { type: 'debuff' as EffectType, value: 3, duration: 3, source: abilityId }],
-          } : null,
-          playerTurn: false,
-        },
-      }));
-
-      setTimeout(() => enemyTurn(), 800);
-    } else if (ability.tags.effect === 'buff') {
-      addBattleLog(`${ability.name}! Ты ускорен!`, 'info');
-      setState(prev => ({
-        ...prev,
-        battle: { ...prev.battle, playerTurn: false },
-      }));
-      setTimeout(() => enemyTurn(), 800);
+      if (newEnemyHp <= 0) setTimeout(() => endBattle(true), 600);
+      else setTimeout(() => enemyTurn(), 800);
     }
-
-    setAbilityMenu(false);
   }, [state.battle, state.hero, addBattleLog]);
 
   // ─── ХОД ВРАГА ───
   const enemyTurn = useCallback(() => {
     setState(prev => {
       if (!prev.battle.enemy || prev.battle.enemy.currentHp <= 0) return prev;
-
       const enemy = prev.battle.enemy;
       const stats = getEffectiveStats(prev.hero);
-
-      // Уменьшаем кулдауны
-      Object.keys(cooldownsRef.current).forEach(key => {
-        if (cooldownsRef.current[key] > 0) cooldownsRef.current[key]--;
-      });
-
-      // Враг атакует
-      let enemyDmg = enemy.template.baseDamage + rand(-1, 2);
-
-      // Дебаффы снижают урон врага
-      if (enemy.debuffs.length > 0) {
-        enemyDmg = Math.max(1, enemyDmg - 2);
-      }
-
-      // Уклонение
-      const dodgeChance = stats.agi * 2;
+      const dodgeChance = stats.agi * 3;
       if (rand(1, 100) <= dodgeChance) {
-        return {
-          ...prev,
-          battle: {
-            ...prev.battle,
-            log: [...prev.battle.log, { text: `${enemy.template.name} атакует, но ты уклоняешься!`, type: 'info' as const, turn: prev.battle.turn }],
-            playerTurn: true,
-            turn: prev.battle.turn + 1,
-          },
-        };
+        return { ...prev, battle: { ...prev.battle, log: [...prev.battle.log, { text: `${enemy.template.name} промахивается!`, type: 'info' as const, turn: prev.battle.turn }], playerTurn: true, turn: prev.battle.turn + 1 } };
       }
-
-      const finalDmg = Math.max(1, enemyDmg - Math.floor(stats.armor / 2));
+      const finalDmg = Math.max(1, enemy.template.baseDamage + rand(-1, 2) - Math.floor(stats.armor / 2));
       const newHp = Math.max(0, prev.hero.currentHp - finalDmg);
-
-      const newLog: BattleLogEntry = {
-        text: `${enemy.template.name} атакует! Урон: ${finalDmg}`,
-        type: 'damage',
-        turn: prev.battle.turn,
-      };
-
+      const newLog: BattleLogEntry = { text: `${enemy.template.name} атакует! Урон: ${finalDmg}`, type: 'damage', turn: prev.battle.turn };
       if (newHp <= 0) {
-        return {
-          ...prev,
-          hero: { ...prev.hero, currentHp: 0 },
-          battle: {
-            ...prev.battle,
-            log: [...prev.battle.log, newLog],
-            active: false,
-            enemy: null,
-            turn: prev.battle.turn + 1,
-          },
-          eventLog: [...prev.eventLog, { text: '💀 Ты пал в бою...', type: 'combat' as const, time: prev.gameTime }],
-        };
+        return { ...prev, hero: { ...prev.hero, currentHp: 0 }, battle: { ...prev.battle, log: [...prev.battle.log, newLog], active: false, enemy: null, turn: prev.battle.turn + 1 }, eventLog: [...prev.eventLog, { text: '💀 Ты пал в бою...', type: 'combat' as const, time: prev.gameTime }] };
       }
-
-      return {
-        ...prev,
-        hero: { ...prev.hero, currentHp: newHp },
-        battle: {
-          ...prev.battle,
-          log: [...prev.battle.log, newLog],
-          playerTurn: true,
-          turn: prev.battle.turn + 1,
-        },
-      };
+      return { ...prev, hero: { ...prev.hero, currentHp: newHp }, battle: { ...prev.battle, log: [...prev.battle.log, newLog], playerTurn: true, turn: prev.battle.turn + 1 } };
     });
   }, []);
 
@@ -516,135 +307,109 @@ export function useGameState() {
   const endBattle = useCallback((victory: boolean) => {
     if (!state.battle.enemy) return;
     const enemy = state.battle.enemy;
-
     if (victory) {
       const loot = enemy.template.loot;
       const goldGained = rand(loot.gold.min, loot.gold.max);
       const xpGained = loot.xp;
-
       addBattleLog(`🎉 Победа! +${xpGained} XP, +${goldGained} золота`, 'loot');
 
-      // Обновляем бистеарий
       setState(prev => {
         const newInventory = [...prev.hero.inventory];
-
-        // Дроп предметов
         loot.items.forEach(drop => {
           if (Math.random() < drop.chance) {
             const item = ITEMS[drop.itemId];
             if (item) {
-              const existingIdx = newInventory.findIndex(i => i.item.id === item.id);
-              if (existingIdx >= 0 && item.stackable) {
-                newInventory[existingIdx] = {
-                  ...newInventory[existingIdx],
-                  count: Math.min(newInventory[existingIdx].count + 1, item.maxStack || 99),
-                };
-              } else {
-                newInventory.push({ item, count: 1 });
-              }
-              addLog(`Получен предмет: ${item.name}`, 'loot');
+              const idx = newInventory.findIndex(i => i.item.id === item.id);
+              if (idx >= 0 && item.stackable) newInventory[idx] = { ...newInventory[idx], count: Math.min(newInventory[idx].count + 1, item.maxStack || 99) };
+              else newInventory.push({ item, count: 1 });
+              addLog(`Получен: ${item.name}`, 'loot');
             }
           }
         });
 
+        // Шанс найти руну
+        const location = LOCATIONS[prev.currentLocation];
+        if (location?.runeDrops && location.runeDrops.length > 0 && Math.random() < 0.2) {
+          const runeId = pickRandom(location.runeDrops);
+          if (!prev.hero.collectedRunes.includes(runeId)) {
+            const rune = RUNES[runeId];
+            if (rune) {
+              addLog(`🔮 Найдена руна: ${rune.name}!`, 'loot');
+              return {
+                ...prev,
+                hero: {
+                  ...prev.hero,
+                  level: prev.hero.level,
+                  xp: prev.hero.xp + xpGained,
+                  gold: prev.hero.gold + goldGained,
+                  inventory: newInventory,
+                  collectedRunes: [...prev.hero.collectedRunes, runeId],
+                  bestiary: { ...prev.hero.bestiary, [enemy.template.id]: { ...prev.hero.bestiary[enemy.template.id], kills: (prev.hero.bestiary[enemy.template.id]?.kills || 0) + 1 } },
+                },
+                battle: { active: false, enemy: null, log: [], turn: 0, playerTurn: true, selectedBodyPart: null },
+              };
+            }
+          }
+        }
+
+        // Левелап
         let newXp = prev.hero.xp + xpGained;
         let newLevel = prev.hero.level;
         let newXpToNext = prev.hero.xpToNext;
         let newBaseStats = { ...prev.hero.baseStats };
-
-        // Левелап
         while (newXp >= newXpToNext) {
           newXp -= newXpToNext;
           newLevel++;
           newXpToNext = Math.floor(newXpToNext * 1.5);
           newBaseStats = {
             ...newBaseStats,
-            str: newBaseStats.str + 1,
-            agi: newBaseStats.agi + 1,
-            int: newBaseStats.int + 1,
-            vit: newBaseStats.vit + 1,
-            maxHp: newBaseStats.maxHp + 5,
-            maxMp: newBaseStats.maxMp + 3,
+            str: newBaseStats.str + 1, agi: newBaseStats.agi + 1, int: newBaseStats.int + 1,
+            maxHp: newBaseStats.maxHp + 5, maxMp: newBaseStats.maxMp + 3,
+            firePower: newBaseStats.firePower + (Math.random() < 0.3 ? 1 : 0),
+            waterPower: newBaseStats.waterPower + (Math.random() < 0.3 ? 1 : 0),
+            earthPower: newBaseStats.earthPower + (Math.random() < 0.3 ? 1 : 0),
+            airPower: newBaseStats.airPower + (Math.random() < 0.3 ? 1 : 0),
+            lightPower: newBaseStats.lightPower + (Math.random() < 0.3 ? 1 : 0),
+            darkPower: newBaseStats.darkPower + (Math.random() < 0.3 ? 1 : 0),
           };
-          addLog(`⬆️ Уровень ${newLevel}! Статы повышены!`, 'system');
+          addLog(`⬆️ Уровень ${newLevel}!`, 'system');
         }
-
-        const effectiveStats = { ...newBaseStats };
-        // Пересчёт с экипировкой
-        Object.values(prev.hero.equipped).forEach(item => {
-          if (item?.stats) {
-            Object.entries(item.stats).forEach(([key, val]) => {
-              if (val && key in effectiveStats) {
-                (effectiveStats as any)[key] += val;
-              }
-            });
-          }
-        });
+        const newOsmMax = 4 + (newLevel - 1) * 2;
 
         return {
           ...prev,
           hero: {
-            ...prev.hero,
-            level: newLevel,
-            xp: newXp,
-            xpToNext: newXpToNext,
-            gold: prev.hero.gold + goldGained,
-            baseStats: newBaseStats,
-            currentHp: Math.min(effectiveStats.maxHp, prev.hero.currentHp),
-            currentMp: Math.min(effectiveStats.maxMp, prev.hero.currentMp),
-            inventory: newInventory,
-            bestiary: {
-              ...prev.hero.bestiary,
-              [enemy.template.id]: {
-                ...prev.hero.bestiary[enemy.template.id],
-                kills: (prev.hero.bestiary[enemy.template.id]?.kills || 0) + 1,
-              },
-            },
+            ...prev.hero, level: newLevel, xp: newXp, xpToNext: newXpToNext,
+            gold: prev.hero.gold + goldGained, baseStats: newBaseStats,
+            osmMax: newOsmMax, inventory: newInventory,
+            bestiary: { ...prev.hero.bestiary, [enemy.template.id]: { ...prev.hero.bestiary[enemy.template.id], kills: (prev.hero.bestiary[enemy.template.id]?.kills || 0) + 1 } },
           },
-          battle: { active: false, enemy: null, log: [], turn: 0, playerTurn: true },
+          battle: { active: false, enemy: null, log: [], turn: 0, playerTurn: true, selectedBodyPart: null },
         };
       });
-
-      addLog(`Победа над ${enemy.template.name}! +${goldGained} золота, +${xpGained} опыта`, 'loot');
+      addLog(`Победа над ${enemy.template.name}!`, 'loot');
     }
-
-    setAbilityMenu(false);
-    setItemMenu(false);
-    cooldownsRef.current = {};
   }, [state.battle.enemy, addBattleLog, addLog]);
 
-  // ─── ПОБЕГ ───
   const flee = useCallback(() => {
     if (!state.battle.active || !state.battle.enemy) return;
-
     const stats = getEffectiveStats(state.hero);
-    const fleeChance = 30 + stats.agi * 3 - state.battle.enemy.template.speed * 2;
-
-    if (rand(1, 100) <= fleeChance) {
+    if (rand(1, 100) <= 30 + stats.agi * 3) {
       addBattleLog('Ты сбежал!', 'info');
-      addLog('Удалось сбежать из боя.', 'system');
-      setState(prev => ({
-        ...prev,
-        battle: { active: false, enemy: null, log: [], turn: 0, playerTurn: true },
-      }));
+      addLog('Удалось сбежать.', 'system');
+      setState(prev => ({ ...prev, battle: { active: false, enemy: null, log: [], turn: 0, playerTurn: true, selectedBodyPart: null } }));
     } else {
       addBattleLog('Побег не удался!', 'info');
-      setState(prev => ({
-        ...prev,
-        battle: { ...prev.battle, playerTurn: false },
-      }));
+      setState(prev => ({ ...prev, battle: { ...prev.battle, playerTurn: false } }));
       setTimeout(() => enemyTurn(), 800);
     }
   }, [state.battle, addBattleLog, addLog, enemyTurn]);
 
-  // ─── ИССЛЕДОВАНИЕ ───
   const explore = useCallback(() => {
     const location = LOCATIONS[state.currentLocation];
     if (!location) return;
-
     if (location.tags.type === 'city') {
       addLog(`Ты осматриваешь ${location.name}. Всё спокойно.`, 'story');
-      // В городе — шанс найти ресурс
       if (location.resources.length > 0 && Math.random() < 0.3) {
         const resId = pickRandom(location.resources);
         const item = ITEMS[resId];
@@ -652,94 +417,103 @@ export function useGameState() {
           setState(prev => {
             const newInv = [...prev.hero.inventory];
             const idx = newInv.findIndex(i => i.item.id === item.id);
-            if (idx >= 0 && item.stackable) {
-              newInv[idx] = { ...newInv[idx], count: Math.min(newInv[idx].count + 1, item.maxStack || 99) };
-            } else {
-              newInv.push({ item, count: 1 });
-            }
+            if (idx >= 0 && item.stackable) newInv[idx] = { ...newInv[idx], count: Math.min(newInv[idx].count + 1, item.maxStack || 99) };
+            else newInv.push({ item, count: 1 });
             return { ...prev, hero: { ...prev.hero, inventory: newInv } };
           });
-          addLog(`Найдено: ${item.name}!`, 'loot');
+          addLog(`Найдено: ${item.name}`, 'loot');
         }
       }
       return;
     }
-
-    // Опасная локация — встреча с врагом
-    if (location.enemies.length > 0) {
-      const encounterChance = 0.7;
-      if (Math.random() < encounterChance) {
-        startBattle();
-      } else {
-        // Нашли ресурс
-        if (location.resources.length > 0 && Math.random() < 0.5) {
-          const resId = pickRandom(location.resources);
-          const item = ITEMS[resId];
-          if (item) {
-            setState(prev => {
-              const newInv = [...prev.hero.inventory];
-              const idx = newInv.findIndex(i => i.item.id === item.id);
-              if (idx >= 0 && item.stackable) {
-                newInv[idx] = { ...newInv[idx], count: Math.min(newInv[idx].count + 1, item.maxStack || 99) };
-              } else {
-                newInv.push({ item, count: 1 });
-              }
-              return { ...prev, hero: { ...prev.hero, inventory: newInv } };
-            });
-            addLog(`Исследуя ${location.name}, ты находишь: ${item.name}`, 'loot');
-          }
-        } else {
-          addLog(`Ты исследуешь ${location.name}. Пока никого...`, 'story');
+    if (location.enemies.length > 0 && Math.random() < 0.7) {
+      startBattle();
+    } else {
+      addLog(`Исследуя ${location.name}, пока никого...`, 'story');
+      if (location.resources.length > 0 && Math.random() < 0.5) {
+        const resId = pickRandom(location.resources);
+        const item = ITEMS[resId];
+        if (item) {
+          setState(prev => {
+            const newInv = [...prev.hero.inventory];
+            const idx = newInv.findIndex(i => i.item.id === item.id);
+            if (idx >= 0 && item.stackable) newInv[idx] = { ...newInv[idx], count: Math.min(newInv[idx].count + 1, item.maxStack || 99) };
+            else newInv.push({ item, count: 1 });
+            return { ...prev, hero: { ...prev.hero, inventory: newInv } };
+          });
+          addLog(`Найдено: ${item.name}`, 'loot');
         }
       }
     }
   }, [state.currentLocation, addLog, startBattle]);
 
-  // ─── ОТДЫХ (в городе) ───
   const rest = useCallback(() => {
     const location = LOCATIONS[state.currentLocation];
     if (!location || location.tags.type !== 'city') return;
-
+    if (state.hero.gold < 5) { addLog('Недостаточно золота (нужно 5).', 'system'); return; }
     const stats = getEffectiveStats(state.hero);
-    const cost = 5;
-
-    if (state.hero.gold < cost) {
-      addLog('Недостаточно золота для отдыха (нужно 5).', 'system');
-      return;
-    }
-
-    setState(prev => ({
-      ...prev,
-      hero: {
-        ...prev.hero,
-        currentHp: stats.maxHp,
-        currentMp: stats.maxMp,
-        gold: prev.hero.gold - cost,
-      },
-    }));
-
-    addLog('Ты отдохнул в таверне. HP и MP восстановлены. (-5 золота)', 'system');
+    setState(prev => ({ ...prev, hero: { ...prev.hero, currentHp: stats.maxHp, currentMp: stats.maxMp, gold: prev.hero.gold - 5 } }));
+    addLog('Отдых в таверне. HP/MP восстановлены. (-5 золота)', 'system');
   }, [state.hero, state.currentLocation, addLog]);
 
-  // ─── СБРОС ───
+  // ─── КОНСТРУКТОР ЗАКЛИНАНИЙ ───
+  const addRuneToSlot = useCallback((slotIndex: number, runeId: string) => {
+    const rune = RUNES[runeId];
+    if (!rune) return;
+    setState(prev => {
+      const slot = prev.hero.spellSlots[slotIndex];
+      if (!slot) return prev;
+      const currentOsm = slot.runes.reduce((sum, rId) => sum + (RUNES[rId]?.osmCost || 0), 0);
+      if (currentOsm + rune.osmCost > prev.hero.osmMax) return prev;
+      const timeRunes = slot.runes.filter(rId => RUNES[rId]?.type === 'time').length;
+      if (rune.type === 'time' && timeRunes >= 2) return prev;
+      const nonTimeRunes = slot.runes.filter(rId => RUNES[rId]?.type !== 'time').length;
+      if (rune.type !== 'time' && nonTimeRunes >= 1) return prev;
+      const newSlots = [...prev.hero.spellSlots];
+      newSlots[slotIndex] = { ...slot, runes: [...slot.runes, runeId] };
+      // Пересчёт маны
+      const totalOsm = newSlots[slotIndex].runes.reduce((sum, rId) => sum + (RUNES[rId]?.osmCost || 0), 0);
+      newSlots[slotIndex] = { ...newSlots[slotIndex], mpCost: totalOsm * 2 + 2 };
+      return { ...prev, hero: { ...prev.hero, spellSlots: newSlots } };
+    });
+  }, []);
+
+  const removeRuneFromSlot = useCallback((slotIndex: number, runeIndex: number) => {
+    setState(prev => {
+      const newSlots = [...prev.hero.spellSlots];
+      const slot = newSlots[slotIndex];
+      if (!slot) return prev;
+      const newRunes = [...slot.runes];
+      newRunes.splice(runeIndex, 1);
+      const totalOsm = newRunes.reduce((sum, rId) => sum + (RUNES[rId]?.osmCost || 0), 0);
+      newSlots[slotIndex] = { ...slot, runes: newRunes, mpCost: totalOsm * 2 + 2 };
+      return { ...prev, hero: { ...prev.hero, spellSlots: newSlots } };
+    });
+  }, []);
+
+  const setSpellTarget = useCallback((slotIndex: number, target: 'self' | 'enemy') => {
+    setState(prev => {
+      const newSlots = [...prev.hero.spellSlots];
+      newSlots[slotIndex] = { ...newSlots[slotIndex], target };
+      return { ...prev, hero: { ...prev.hero, spellSlots: newSlots } };
+    });
+  }, []);
+
+  const selectBodyPart = useCallback((part: BodyPart) => {
+    setState(prev => ({ ...prev, battle: { ...prev.battle, selectedBodyPart: part } }));
+  }, []);
+
   const resetGame = useCallback(() => {
     setState(createInitialState());
     setSelectedItem(null);
-    setAbilityMenu(false);
-    setItemMenu(false);
-    cooldownsRef.current = {};
   }, []);
 
   return {
-    state,
-    selectedItem, setSelectedItem,
-    abilityMenu, setAbilityMenu,
-    itemMenu, setItemMenu,
-    cooldownsRef,
+    state, selectedItem, setSelectedItem, spellBuilder, setSpellBuilder,
     getEffectiveStats: () => getEffectiveStats(state.hero),
     equipItem, unequipItem, useItem,
-    travel, startBattle, playerAttack,
-    useAbility, flee, explore, rest,
-    endBattle, addLog, resetGame,
+    travel, startBattle, playerAttack, castSpell, flee,
+    explore, rest, endBattle, addLog, resetGame,
+    addRuneToSlot, removeRuneFromSlot, setSpellTarget, selectBodyPart,
   };
 }
