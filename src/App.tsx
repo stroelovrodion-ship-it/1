@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { useGameState } from './engine/gameEngine';
+import { useGameState, loadGame, hasSaveGame } from './engine/gameEngine';
+import { MainMenu } from './MainMenu';
 import { LOCATIONS } from './data/locations';
 import { RUNES, SPELL_FORMS, SCROLL_EFFECTS } from './data/runes';
 import { TRAJECTORIES } from './data/trajectories';
@@ -8,6 +9,7 @@ import { ENEMIES } from './data/enemies';
 import { SlotType, RarityType, BodyPart, ElementType, LocationId } from './types/tags';
 
 function App() {
+  const [showMainMenu, setShowMainMenu] = useState(true);
   const game = useGameState();
   const { state } = game;
   const { hero, battle, currentLocation, eventLog } = state;
@@ -20,6 +22,7 @@ function App() {
   const [showSpellList, setShowSpellList] = useState(false);
   const [renamingSlot, setRenamingSlot] = useState<number | null>(null);
   const [newSpellName, setNewSpellName] = useState('');
+  const [showSaveMessage, setShowSaveMessage] = useState(false);
 
   const battleLogRef = useRef<HTMLDivElement>(null);
   const eventLogRef = useRef<HTMLDivElement>(null);
@@ -40,6 +43,37 @@ function App() {
   const bodyPartNames: Record<BodyPart, string> = {
     head: 'Голова', torso: 'Торс', arms: 'Руки', legs: 'Ноги', wings: 'Крылья', tail: 'Хвост',
   };
+
+  // Обработчики главного меню
+  const handleNewGame = () => {
+    game.resetGame();
+    setShowMainMenu(false);
+  };
+
+  const handleLoadGame = () => {
+    const loadedState = loadGame();
+    if (loadedState) {
+      game.loadState(loadedState);
+      setShowMainMenu(false);
+    }
+  };
+
+  const handleSaveGame = () => {
+    const success = game.saveGame();
+    if (success) {
+      setShowSaveMessage(true);
+      setTimeout(() => setShowSaveMessage(false), 2000);
+    }
+  };
+
+  const handleExitToMenu = () => {
+    setShowMainMenu(true);
+  };
+
+  // Показываем главное меню
+  if (showMainMenu) {
+    return <MainMenu onNewGame={handleNewGame} onLoadGame={handleLoadGame} />;
+  }
 
   return (
     <div className="game">
@@ -387,7 +421,30 @@ function App() {
             </div>
           </div>
         </div>
-        <div className="logs-footer"><button className="btn danger" onClick={game.resetGame}>Выход</button></div>
+        <div className="logs-footer">
+          <button className="btn" onClick={handleSaveGame}>💾 Сохранить</button>
+          <button className="btn danger" onClick={handleExitToMenu}>🚪 В меню</button>
+        </div>
+        
+        {/* Сообщение о сохранении */}
+        {showSaveMessage && (
+          <div style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: 'rgba(10, 10, 26, 0.95)',
+            border: '2px solid #6f6',
+            padding: '20px 40px',
+            fontSize: '12px',
+            color: '#6f6',
+            zIndex: 1000,
+            boxShadow: '0 0 20px rgba(102, 255, 102, 0.5)',
+            animation: 'fadeIn 0.3s ease',
+          }}>
+            ✅ Игра сохранена!
+          </div>
+        )}
       </div>
 
       {/* ПРАВАЯ ПАНЕЛЬ */}

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   GameState, HeroState, EventLogEntry,
   SlotType, EnemyInstance,
@@ -10,6 +10,78 @@ import { ENEMIES } from '../data/enemies';
 import { LOCATIONS } from '../data/locations';
 import { RUNES, SPELL_FORMS, SCROLL_EFFECTS } from '../data/runes';
 import { TRAJECTORIES } from '../data/trajectories';
+
+// ═══════════════════════════════════════════════
+// СИСТЕМА СОХРАНЕНИЯ
+// ═══════════════════════════════════════════════
+
+const SAVE_KEY = 'magi_novogo_mira_save';
+
+export function saveGame(state: GameState): boolean {
+  try {
+    const saveData = {
+      version: '1.0.0',
+      timestamp: Date.now(),
+      state: state,
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+    return true;
+  } catch (error) {
+    console.error('Ошибка сохранения:', error);
+    return false;
+  }
+}
+
+export function loadGame(): GameState | null {
+  try {
+    const saveData = localStorage.getItem(SAVE_KEY);
+    if (!saveData) return null;
+    
+    const parsed = JSON.parse(saveData);
+    if (parsed.version && parsed.state) {
+      return parsed.state as GameState;
+    }
+    return null;
+  } catch (error) {
+    console.error('Ошибка загрузки:', error);
+    return null;
+  }
+}
+
+export function hasSaveGame(): boolean {
+  return localStorage.getItem(SAVE_KEY) !== null;
+}
+
+export function deleteSaveGame(): boolean {
+  try {
+    localStorage.removeItem(SAVE_KEY);
+    return true;
+  } catch (error) {
+    console.error('Ошибка удаления сохранения:', error);
+    return false;
+  }
+}
+
+export function getSaveInfo(): { timestamp: number; level: number; location: string } | null {
+  try {
+    const saveData = localStorage.getItem(SAVE_KEY);
+    if (!saveData) return null;
+    
+    const parsed = JSON.parse(saveData);
+    if (parsed.state) {
+      const state = parsed.state as GameState;
+      return {
+        timestamp: parsed.timestamp,
+        level: state.hero.level,
+        location: LOCATIONS[state.currentLocation]?.name || state.currentLocation,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('Ошибка получения информации о сохранении:', error);
+    return null;
+  }
+}
 
 function createInitialHero(): HeroState {
   return {
@@ -655,6 +727,23 @@ export function useGameState() {
     setBuildingSlot(null);
   }, []);
 
+  const loadState = useCallback((newState: GameState) => {
+    setState(newState);
+    setSelectedItem(null);
+    setInteractionMode('none');
+    setBuildingSlot(null);
+  }, []);
+
+  const saveCurrentGame = useCallback(() => {
+    const success = saveGame(state);
+    if (success) {
+      addLog('💾 Игра сохранена!', 'system');
+    } else {
+      addLog('❌ Ошибка сохранения!', 'system');
+    }
+    return success;
+  }, [state, addLog]);
+
   return {
     state, selectedItem, setSelectedItem,
     interactionMode, setInteractionMode,
@@ -666,5 +755,7 @@ export function useGameState() {
     startBuild, saveBuild, addRuneToBuild, removeRuneFromBuild, cancelBuild,
     selectBodyPart, openBestiaryEntry, openItemInteraction,
     renameSpell, swapSpell, getMaxSlots, getMasteryLevel,
+    saveGame: saveCurrentGame,
+    loadState,
   };
 }
